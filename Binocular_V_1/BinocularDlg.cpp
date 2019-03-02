@@ -200,7 +200,7 @@ void CBinocularDlg::OnSelchangeCmbTrigger()
 	{
 		if (triger_mode == 3)
 		{
-			_frame_set_l.GetWindowTextA(fixed_frame_rate_s);
+			_frame_set_l.GetWindowTextW(fixed_frame_rate_s);
 			int fixed_frame_rate = _ttoi(fixed_frame_rate_s);
 			left_Camera->FrameRate = fixed_frame_rate;
 		}
@@ -214,7 +214,7 @@ void CBinocularDlg::OnSelchangeCmbTrigger()
 	{
 		if (triger_mode == 3)
 		{
-			_frame_set_r.GetWindowTextA(fixed_frame_rate_s);
+			_frame_set_r.GetWindowTextW(fixed_frame_rate_s);
 			int fixed_frame_rate = _ttoi(fixed_frame_rate_s);
 			right_Camera->FrameRate = fixed_frame_rate;
 		}
@@ -415,23 +415,29 @@ void CBinocularDlg::OnTimer(UINT_PTR uId)
 		{
 			fram_rate = left_Camera->FrameCount - frmcnt_buffer_l;
 			frmcnt_buffer_l = left_Camera->FrameCount;
-			_left_frate.SetWindowTextA(to_string(fram_rate).c_str());
+			CString str;
+			str.Format(_T("%d"), fram_rate);
+			LPCTSTR pStr = LPCTSTR(str);
+			_left_frate.SetWindowTextW(pStr);
 		}
 		else
 		{
 			frmcnt_buffer_l = 0;
-			_left_frate.SetWindowTextA("N/A");
+			_left_frate.SetWindowTextW(_T("N/A"));
 		}
 		if (right_Camera != NULL)
 		{
 			int fram_rate = right_Camera->FrameCount - frmcnt_buffer_r;
 			frmcnt_buffer_r = right_Camera->FrameCount;
-			_right_frate.SetWindowTextA(to_string(fram_rate).c_str());
+			CString str;
+			str.Format(_T("%d"), fram_rate);
+			LPCTSTR pStr = LPCTSTR(str);
+			_right_frate.SetWindowTextW(pStr);
 		}
 		else
 		{
 			frmcnt_buffer_r = 0;
-			_right_frate.SetWindowTextA("N/A");
+			_right_frate.SetWindowTextW(_T("N/A"));
 		}
 		break;
 	}
@@ -506,7 +512,7 @@ void CBinocularDlg::OnBnClickedBtnSetexposel()
 	{
 		CString expose_s;
 		int expose_v;
-		_left_expose_value.GetWindowTextA(expose_s);
+		_left_expose_value.GetWindowTextW(expose_s);
 		expose_v = _ttoi(expose_s);
 		if (!left_Camera->ChangeExposeValue(expose_v))
 		{
@@ -523,7 +529,7 @@ void CBinocularDlg::OnBnClickedBtnSetexposer()
 	{
 		CString expose_s;
 		int expose_v;
-		_right_expose_value.GetWindowTextA(expose_s);
+		_right_expose_value.GetWindowTextW(expose_s);
 		expose_v = _ttoi(expose_s);
 		if (!right_Camera->ChangeExposeValue(expose_v))
 		{
