@@ -75,6 +75,7 @@ void CBinocularDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_EDT_EXPORER, _right_expose_value);
 	DDX_Control(pDX, IDC_EDT_FRAMESETL, _frame_set_l);
 	DDX_Control(pDX, IDC_EDT_FRAMESETR, _frame_set_r);
+	DDX_Control(pDX, IDC_CHK_ISSAVING, _is_saving);
 }
 
 BEGIN_MESSAGE_MAP(CBinocularDlg, CDialogEx)
@@ -91,6 +92,7 @@ BEGIN_MESSAGE_MAP(CBinocularDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BTN_STOPACQ, &CBinocularDlg::OnBnClickedBtnStopacq)
 	ON_BN_CLICKED(IDC_BTN_SETEXPOSEL, &CBinocularDlg::OnBnClickedBtnSetexposel)
 	ON_BN_CLICKED(IDC_BTN_SETEXPOSER, &CBinocularDlg::OnBnClickedBtnSetexposer)
+	ON_BN_CLICKED(IDC_CHK_ISSAVING, &CBinocularDlg::OnBnClickedChkIssaving)
 END_MESSAGE_MAP()
 
 
@@ -126,10 +128,11 @@ BOOL CBinocularDlg::OnInitDialog()
 	PvInitialize();
 
 	_triger_type.SetCurSel(0);
-	_frame_set_l.SetWindowTextW(_T("30"));
-	_frame_set_r.SetWindowTextW(_T("30"));
-	_left_expose_value.SetWindowTextW(_T("5000"));
-	_right_expose_value.SetWindowTextW(_T("5000"));
+	_is_saving.SetCheck(0);
+	_frame_set_l.SetWindowText(_T("30"));
+	_frame_set_r.SetWindowText(_T("30"));
+	_left_expose_value.SetWindowText(_T("5000"));
+	_right_expose_value.SetWindowText(_T("5000"));
 
 	_left_ip = ntohl(inet_addr("192.168.1.3"));		//IP地址转换 将四个点分十进制转成2进制数 用于显示用于开启相机
 	_right_ip = ntohl(inet_addr("192.168.1.2"));
@@ -200,7 +203,7 @@ void CBinocularDlg::OnSelchangeCmbTrigger()
 	{
 		if (triger_mode == 3)
 		{
-			_frame_set_l.GetWindowTextA(fixed_frame_rate_s);
+			_frame_set_l.GetWindowText(fixed_frame_rate_s);
 			int fixed_frame_rate = _ttoi(fixed_frame_rate_s);
 			left_Camera->FrameRate = fixed_frame_rate;
 		}
@@ -214,7 +217,7 @@ void CBinocularDlg::OnSelchangeCmbTrigger()
 	{
 		if (triger_mode == 3)
 		{
-			_frame_set_r.GetWindowTextA(fixed_frame_rate_s);
+			_frame_set_r.GetWindowText(fixed_frame_rate_s);
 			int fixed_frame_rate = _ttoi(fixed_frame_rate_s);
 			right_Camera->FrameRate = fixed_frame_rate;
 		}
@@ -234,7 +237,7 @@ void CBinocularDlg::OnBnClickedBtnopenleft()
 	if (!left_Camera)	//如果相机不存在
 	{
 		left_Camera = new Camera(htonl(_left_ip), "Left");
-		
+		left_Camera->isSaving = _is_saving.GetCheck();
 		if (!left_Camera->Open())
 		{
 			append_log(left_Camera->outLog);
@@ -252,6 +255,7 @@ void CBinocularDlg::OnBnClickedBtnopenleft()
 	{
 		OnBnClickedBtncloseright();
 		left_Camera = new Camera(htonl(_left_ip), "Left");
+		left_Camera->isSaving = _is_saving.GetCheck();
 		if (!left_Camera->Open())
 		{
 			append_log(left_Camera->outLog);
@@ -293,6 +297,7 @@ void CBinocularDlg::OnBnClickedBtnopenright()
 	if (!right_Camera)	//如果相机不存在
 	{
 		right_Camera = new Camera(htonl(_right_ip), "Right");
+		right_Camera->isSaving = _is_saving.GetCheck();
 		if (!right_Camera->Open())
 		{
 			append_log(right_Camera->outLog);
@@ -309,6 +314,7 @@ void CBinocularDlg::OnBnClickedBtnopenright()
 	{
 		OnBnClickedBtncloseright();
 		right_Camera = new Camera(htonl(_right_ip), "Right");
+		right_Camera->isSaving = _is_saving.GetCheck();
 		if (!right_Camera->Open())
 		{
 			append_log(right_Camera->outLog);
@@ -415,23 +421,23 @@ void CBinocularDlg::OnTimer(UINT_PTR uId)
 		{
 			fram_rate = left_Camera->FrameCount - frmcnt_buffer_l;
 			frmcnt_buffer_l = left_Camera->FrameCount;
-			_left_frate.SetWindowTextA(to_string(fram_rate).c_str());
+			_left_frate.SetWindowText(to_string(fram_rate).c_str());
 		}
 		else
 		{
 			frmcnt_buffer_l = 0;
-			_left_frate.SetWindowTextA("N/A");
+			_left_frate.SetWindowText("N/A");
 		}
 		if (right_Camera != NULL)
 		{
 			int fram_rate = right_Camera->FrameCount - frmcnt_buffer_r;
 			frmcnt_buffer_r = right_Camera->FrameCount;
-			_right_frate.SetWindowTextA(to_string(fram_rate).c_str());
+			_right_frate.SetWindowText(to_string(fram_rate).c_str());
 		}
 		else
 		{
 			frmcnt_buffer_r = 0;
-			_right_frate.SetWindowTextA("N/A");
+			_right_frate.SetWindowText("N/A");
 		}
 		break;
 	}
@@ -506,7 +512,7 @@ void CBinocularDlg::OnBnClickedBtnSetexposel()
 	{
 		CString expose_s;
 		int expose_v;
-		_left_expose_value.GetWindowTextA(expose_s);
+		_left_expose_value.GetWindowText(expose_s);
 		expose_v = _ttoi(expose_s);
 		if (!left_Camera->ChangeExposeValue(expose_v))
 		{
@@ -523,12 +529,26 @@ void CBinocularDlg::OnBnClickedBtnSetexposer()
 	{
 		CString expose_s;
 		int expose_v;
-		_right_expose_value.GetWindowTextA(expose_s);
+		_right_expose_value.GetWindowText(expose_s);
 		expose_v = _ttoi(expose_s);
 		if (!right_Camera->ChangeExposeValue(expose_v))
 		{
 			append_log(string("Wrnning: Right Camera changed expose val failed."));
 		};
 		append_log(right_Camera->outLog);
+	}
+}
+
+
+void CBinocularDlg::OnBnClickedChkIssaving()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	if (left_Camera)
+	{
+		left_Camera->isSaving = _is_saving.GetCheck();
+	}
+	if (right_Camera)
+	{
+		right_Camera->isSaving = _is_saving.GetCheck();
 	}
 }

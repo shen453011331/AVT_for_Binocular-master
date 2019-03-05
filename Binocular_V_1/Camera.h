@@ -9,7 +9,8 @@
 //#include <deque>
 using namespace cv;
 using namespace std;
-#define MAX_FRAMES 100 
+
+#define MAX_FRAMES 100
 #define THREADNUM 5
 enum AttrType
 {
@@ -40,6 +41,7 @@ public:
 	tPvUint32 Expose;		//相机曝光值			获得
 	int FrameRate;			//采集帧率				输入/初始化为30
 	bool isStreaming;		//是否正在采集			初始为否
+	bool isSaving;			//是否需要存图			初始为否
 	int TrigerMode;			//触发模式				0 为自由模式 1硬件中断1 2硬件中断通道2 3为软件中断 初始为0;
 
 	unsigned int FrameCount;	//采图数量计数			初始为0 调用Save方法的时候+1
@@ -63,28 +65,25 @@ public:
 
 
 	//多线程信号量
-	//HANDLE m_putEvent, m_saveEvent;
-	HANDLE sequenceVacant, sequenceBusy;//用于对线程间处理进行控制的，这两个用于进行回调和队列线程间处理
-	HANDLE h_seqThread,h_proThread[THREADNUM];//建立两个线程的线程头，用来控制线程中断
-	int seqThreState, proThreState; //两个线程的控制量，用于结束while语句，实现线程停止。
-	BYTE* Seq_Buffer;//用于存入堆栈的图像buffer指针
-	deque<Mat> frameSequ, processSequ;//用于进行堆栈和处理的图像队列
-	HANDLE swap, swapOver;//用于在堆栈和处理线程间进行操作
-	HANDLE NextProcess[THREADNUM];//表示是否通知下个线程进行
-	HANDLE ProcessImage[THREADNUM];//是否通知下个线程处理
-	int threadState[THREADNUM];
-	int threadProState[THREADNUM];//控制线程处理的状态
+	HANDLE sequenceVacant, sequenceBusy;		//用于进行相机回调和压入队列的线程间处理控制
+	HANDLE swap, swapOver;						//用于堆栈交换的控制量
+	HANDLE NextProcess[THREADNUM];				//表示是否通知下个线程进行
 
-	HANDLE g_mtx_swap;//锁定deque交换
+	int seqThreadState, proThreadState[THREADNUM];	//两类线程的控制量，用于结束while语句，实现线程停止。
+	int acqThreadState;
+	BYTE* Seq_Buffer;							//用于存入堆栈的图像buffer指针
+	deque<Mat> frameSequ, processSequ;			//用于进行堆栈和处理的图像队列
 };
+
 struct syInfo
 {
 	int num;//线程编号
 	Camera* ptr;//类指针
 };//用于进行线程中参数传入
+
 //相机回调函数的函数指针（void*) 此函数将pFrame作为输入 pFrame有内置参数，可以确定是哪一个相机拍摄的图像
 void __stdcall FrameDoneCB(tPvFrame* pFrame);
 
 DWORD WINAPI SeqThread(LPVOID param);
 DWORD WINAPI ProThread(LPVOID param);
-int getImage(Camera* this_cam, Mat & image, int nextThreadNum);
+int getImage(Camera* this_cam, Mat & image, int thread, int nextThreadNum);

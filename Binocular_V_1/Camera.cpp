@@ -23,7 +23,6 @@ Camera::Camera()
 	//初始化可能需要Initialized Protection
 }
 
-
 Camera::~Camera()
 {
 	if (isStreaming)
@@ -45,6 +44,7 @@ Camera::Camera(tPvUint32 ip_addr, std::string cam_name)
 	Expose = 0;
 	FrameRate = 30;
 	isStreaming = false;
+	isSaving = false;
 	TrigerMode = 0;
 	FrameCount = 0;
 	outLog = "Camera " + CameraName + " has been created.";
@@ -54,16 +54,12 @@ Camera::Camera(tPvUint32 ip_addr, std::string cam_name)
 	//初始化各类信号量
 	for (int tNum = 0; tNum < THREADNUM; tNum++)
 	{
-		NextProcess[tNum] = CreateEvent(NULL, TRUE, FALSE, NULL);
-		ProcessImage[tNum] = CreateEvent(NULL, TRUE, FALSE, NULL);
-		threadState[tNum] = 1;
-		threadProState[tNum] = 1;
+		NextProcess[tNum] = CreateEvent(NULL, TRUE, FALSE, NULL);		//初始化都为false
 	}
-	g_mtx_swap = CreateMutex(NULL, FALSE, NULL);
-	sequenceBusy = CreateEvent(NULL, TRUE, FALSE, NULL);//设置为false
-	sequenceVacant = CreateEvent(NULL, TRUE, TRUE, NULL);//设置为true
-	swap = CreateEvent(NULL, TRUE, FALSE, NULL);//设置为false
-	swapOver = CreateEvent(NULL, TRUE, FALSE, NULL);//设置为true
+	sequenceBusy = CreateEvent(NULL, TRUE, FALSE, NULL);		//设置为false
+	sequenceVacant = CreateEvent(NULL, TRUE, TRUE, NULL);		//设置为true
+	swap = CreateEvent(NULL, TRUE, FALSE, NULL);				//设置为false
+	swapOver = CreateEvent(NULL, TRUE, FALSE, NULL);			//设置为true
 }
 
 bool Camera::AttrSet(AttrType attrtype, const char* name, const char* value)
@@ -238,16 +234,7 @@ bool Camera::Open()
 	}
 
 
-	//建立两个线程
-	DWORD id ;
-	h_seqThread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)SeqThread, this, 0, &id);
-	syInfo t_info[THREADNUM];
-	for (int tNum = 0; tNum < THREADNUM; tNum++)
-	{
-		t_info[tNum].num = tNum;
-		t_info[tNum].ptr = this;
-		h_proThread[tNum] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)ProThread, &t_info[tNum], 0, &id);
-	}
+
 	return true;
 }
 
@@ -379,8 +366,6 @@ bool Camera::StartCapture()
 			return false;
 		}
 
-	
-
 		//内存分配完毕 构建队列
 		int ErrCode = 0;
 		for (i = 0; i < MAX_FRAMES; i++)
@@ -388,16 +373,32 @@ bool Camera::StartCapture()
 			ErrCode |= PvCaptureQueueFrame(H_Camera, &pFrames[i], FrameDoneCB);
 		}
 
-		//开启处理和队列线程
-		seqThreState = 1;
-		//proThreState = 1;
-		SetEvent(NextProcess[0]);
-		SetEvent(ProcessImage[0]);
-
-
 		//队列构建完毕 开始读图
 		if (ErrCode == ePvErrSuccess)
 		{
+			//已知相机的规格和图像大小 首先建立一个Seq_buffer的大小，以后这个buffer就固定了
+			Seq_Buffer = new unsigned char[Width*Height];
+
+			//开启处理和队列flag,开启后开启它 关闭先关闭它
+			seqThreadState = 1;
+			acqThreadState = 1;
+			for (i = 0; i < THREADNUM; i++)
+				proThreadState[i] = 1;
+			SetEvent(NextProcess[0]);	//开启第一个的处理线程
+			//建立两组线程 一个是单线程 用于拷贝
+			DWORD id;
+			CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)SeqThread, this, 0, &id);
+			//一个是多线程 用来处理内容
+			syInfo t_info[THREADNUM];
+			for (int tNum = 0; tNum < THREADNUM; tNum++)
+			{
+				t_info[tNum].num = tNum;
+				t_info[tNum].ptr = this;
+				CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)ProThread, &t_info[tNum], 0, &id);
+				Sleep(10);		
+			}
+			//以上内容可以放在一个threadInit()函数里
+			//发送相机命令
 			Err = PvCommandRun(H_Camera, "AcquisitionStart");//this Action will trigger one acquisition
 			isStreaming = true;
 			outLog = "Camera Open Successful in Camera:" + CameraName;
@@ -434,15 +435,20 @@ bool Camera::CloseCapture()
 	if (isStreaming)
 	{
 		Err = PvCommandRun(H_Camera, "AcquisitionStop");
-		Sleep(200);
+		Sleep(200);	//停止200ms 
+
+		//关闭线程
+		acqThreadState = 0;	//这个直接就可以导致采集线程停止 因为采集线程依靠这个使每个CB函数都退出
+		seqThreadState = 0;	//这个直接就可以导致队列线程停止 因为队列线程是依靠这个量无限循环的 直接return0
+		for (i = 0; i < THREADNUM; i++)
+			proThreadState[i] = 0;		//这个直接可以导致处理线程停止 因为处理线程是靠这个量无限循环的 直接return0
+
+		//等待所有线程结束 110>100
+		Sleep(110);
+		//以上内容可以放在一个threadClose()函数里
 		if (Err == ePvErrSuccess)
 		{
 			Err = PvCaptureQueueClear(H_Camera);		//2、CaptureQueueClear
-
-
-			//关闭线程
-			seqThreState = 0;
-			proThreState = 0;
 
 			if (Err == ePvErrSuccess)
 			{
@@ -468,7 +474,7 @@ bool Camera::CloseCapture()
 			outLog = "Warnning: Failed to stop the acquisition of camera " + CameraName;
 		}
 
-		//不论上述是否停止成功 都要进行清理
+		//不论上述是否停止成功 都要进行清理 这里应该可以有更好的处理方法
 		for (i = 0; i<MAX_FRAMES; i++)
 		{
 			delete pFrames[i].ImageBuffer;
@@ -480,6 +486,7 @@ bool Camera::CloseCapture()
 			pFrames = NULL;
 		}
 
+		//确定返回值
 		if (Err == ePvErrSuccess)
 		{
 			return true;
@@ -493,9 +500,6 @@ bool Camera::CloseCapture()
 	{
 		outLog = "Camera is not on Capturing. Camera " + CameraName;
 	}
-
-
-	
 }
 
 bool Camera::ChangeTrigerMode(int triger_mode)
@@ -540,7 +544,7 @@ bool Camera::ChangeTrigerMode(int triger_mode)
 bool Camera::ChangeExposeValue(unsigned long evalue)
 {
 	int ErrCode = 0;
-	ErrCode|= PvAttrUint32Set(H_Camera, "ExposureValue", evalue);
+	ErrCode |= PvAttrUint32Set(H_Camera, "ExposureValue", evalue);
 	ErrCode |= PvAttrUint32Get(H_Camera, "ExposureValue", &Expose);
 	if (ErrCode == 0 && Expose == evalue)
 	{
@@ -559,134 +563,138 @@ bool Camera::ChangeExposeValue(unsigned long evalue)
 void __stdcall FrameDoneCB(tPvFrame * pFrame)
 {
 	Camera* this_cam = (Camera*)pFrame->Context[0];
+	//帧数计数，表示目前接收了多少帧
 	this_cam->FrameCount = pFrame->FrameCount;
-
-	//对每一个进入的图像数据，copy到一个临时buffer中，最多等待100ms
-	if (WaitForSingleObject(this_cam->sequenceVacant, 100) == WAIT_OBJECT_0)//等待堆栈线程存入堆栈，等待最多100ms
+	if (this_cam->acqThreadState > 0)
 	{
-		ResetEvent(this_cam->sequenceVacant);//接收到信号后，重置信号
-		if (this_cam->Seq_Buffer != NULL)delete[]this_cam->Seq_Buffer;//重置存入堆栈内存
-		this_cam->Seq_Buffer = new unsigned char[(pFrame->Width)*(pFrame->Height)];//数据复制给堆栈内存
-		memcpy(this_cam->Seq_Buffer, pFrame->ImageBuffer, (pFrame->Width)*(pFrame->Height));//数据复制给堆栈内存
-		SetEvent(this_cam->sequenceBusy);//copy 数据完毕，通知堆栈线程开始执行为有效信号
+		//对每一个进入的图像数据，copy到一个临时buffer中，最多等待20ms
+		if (WaitForSingleObject(this_cam->sequenceVacant, 100) == WAIT_OBJECT_0)
+		{
+			ResetEvent(this_cam->sequenceVacant);													//接收到信号后，重置信号
+			memcpy(this_cam->Seq_Buffer, pFrame->ImageBuffer, (pFrame->Width)*(pFrame->Height));	//数据复制给buffer
+			SetEvent(this_cam->sequenceBusy);														//copy 数据完毕，通知堆栈线程开始执行为有效信号
+		}
+		PvCaptureQueueFrame(tPvHandle(pFrame->Context[1]), pFrame, FrameDoneCB);
 	}
-	PvCaptureQueueFrame(tPvHandle(pFrame->Context[1]), pFrame, FrameDoneCB);
 }
 
+//单线程队列拷贝函数
 DWORD WINAPI SeqThread(LPVOID param)
 {
 	Camera* this_cam = (Camera*)param;
-	IplImage* pImage = cvCreateImage(cvSize(this_cam->Width, this_cam->Height), IPL_DEPTH_8U, 1);//准备一个iplimage变量，用于保存
-	Mat SaveImage;//提前准备出mat类变量
-	while (this_cam->seqThreState > 0)
+	Mat SaveImage;
+	SaveImage.create(this_cam->Height, this_cam->Width, CV_8UC1);
+	
+	while (this_cam->seqThreadState > 0)
 	{
-		if (WaitForSingleObject(this_cam->sequenceBusy, 100) == WAIT_OBJECT_0)//等待回调中的copy完毕，就返回有效信号，等待100，其实由于循环相当于一直在等待，不过可以帮助其迅速关闭
+		//在没信号的时候每隔100ms检查一次，有信号立刻接入
+		if (WaitForSingleObject(this_cam->sequenceBusy, 100) == WAIT_OBJECT_0)
 		{
-			ResetEvent(this_cam->sequenceBusy);//一旦执行，重置信号
-			//这里可能需要判断相机的宽度和类中的宽度是否一致。
-			memcpy(pImage->imageData, this_cam->Seq_Buffer, (this_cam->Width)*(this_cam->Height));
-			SaveImage = cvarrToMat(pImage);//将数据拷贝到图像中，进一步转换为mat类
-
-			this_cam->frameSequ.push_back(SaveImage);//将mat类存入一个mat的deque变量中，用于后面存，前面取
-													//这里拷贝的逻辑是，一旦processSequ中的数据为空，则将frameSequ当前存入数据整体迁移过去
-			if (WaitForSingleObject(this_cam->swap, 0) == WAIT_OBJECT_0)//这个就是判断当前processSequ是否为空的信号量
+			ResetEvent(this_cam->sequenceBusy);														//一旦执行，重置信号
+			memcpy(SaveImage.data, this_cam->Seq_Buffer, (this_cam->Width)*(this_cam->Height));
+			this_cam->frameSequ.push_back(SaveImage);												//将mat类存入一个mat的deque变量中，用于后面存，前面取
+			//当swap有效的时候，调用swap方法将数据转给processSequ
+			if (WaitForSingleObject(this_cam->swap, 0) == WAIT_OBJECT_0)							//这个就是判断当前processSequ是否为空的信号量
 			{
-				ResetEvent(this_cam->swap);//一但开始执行，信号量重置
-				this_cam->processSequ.swap(this_cam->frameSequ);//deque迁移
-				SetEvent(this_cam->swapOver);//一旦迁移完毕，通知后面可以继续处理
+				ResetEvent(this_cam->swap);															//一但开始执行，信号量重置
+				this_cam->processSequ.swap(this_cam->frameSequ);									//队列指针交换
+				SetEvent(this_cam->swapOver);														//一旦迁移完毕，通知后面可以继续处理
 			}
-			SetEvent(this_cam->sequenceVacant);//这个是存入完成后的
+			SetEvent(this_cam->sequenceVacant);														//这个是存入完成后的
 		}
 	}
-	cvReleaseImage(&pImage);
 	return 0;
 }
+
+//多线程处理函数 循环多线程对数据进行处理
 DWORD WINAPI ProThread(LPVOID param)
 {
-	syInfo* t_info1 = (syInfo*)param;//用于进行线程传入量
-	int threadNum = t_info1->num;//代表当前线程的线程数
-	int nextThreadNum = 0;//用于将线程循环起来，每一个线程找到其对应的下一个线程。
-	Camera* this_cam = (Camera*)t_info1->ptr;
+	syInfo* t_info1 = (syInfo*)param;			//用于进行线程传入量
+	int threadNum = t_info1->num;				//代表当前线程的线程数
+	CString num_s;
+	num_s.Format("%d", threadNum);
+	int nextThreadNum = 0;						//用于将线程循环起来，每一个线程找到其对应的下一个线程。
+	Camera* this_cam = (Camera*)t_info1->ptr;	//本相机指针
 	if (threadNum == THREADNUM - 1)
-		nextThreadNum == 0;
+		nextThreadNum = 0;
 	else
 		nextThreadNum = threadNum + 1;
-	Mat image;//这个是用来保存获取进入当前线程图像的临时文件
-	int num_circle = 0;//这个用来表示当前线程的循环次数，用于计算进入当前线程的图像文件序号
-	int b_err;
-	while (this_cam->threadState[threadNum] > 0)
-	{
-		int frameNum = threadNum + 1 + num_circle*THREADNUM;//通过循环次数，获取图像序号
+	Mat image;									//这个是用来保存获取进入当前线程图像的临时文件
+
+	int num_circle = 0;							//这个用来表示当前线程的循环次数，用于计算进入当前线程的图像文件序号
+	while (this_cam->proThreadState[threadNum] > 0)
+	{		
+		int b_err = 0;
+		int frameNum = threadNum + 1 + num_circle*THREADNUM;//通过循环次数，获取图像序号 这就是用来存储图像的而已
 		if (WaitForSingleObject(this_cam->NextProcess[threadNum], INFINITE) == WAIT_OBJECT_0)
 			//用来接收上一个线程的信号，即上一个线程通知下一个线程可以开始对队列中图像进行预处理
 		{
-			b_err = 0;
-			ResetEvent(this_cam->NextProcess[threadNum]);//重置信号量
-			b_err = getImage(this_cam, image, nextThreadNum);//读取图像完成
-			if (b_err == -1)
-					break;
-			if (b_err=1)//一旦之前成果拿到数据
-			{//多线程并行进行图像预处理
-				SetEvent(this_cam->NextProcess[nextThreadNum]);//即可以通过下一个线程开始获取图像
-				char filename[50];
-				sprintf(filename, "C1//C1Frame%05d.bmp", frameNum);
-				imwrite(filename, image);
+			ResetEvent(this_cam->NextProcess[threadNum]);				//重置信号量
+			b_err = getImage(this_cam, image, threadNum, nextThreadNum);//调用获取图像的函数 并且设置下一个线程信号量
+			//这里是并行存储
+			if (b_err == -1)		//如果线程要停止了，那就彻底停止该线程并退出(break)
+				break;
+			else if (b_err == 0)	//如果因交换失败而拿不到数据，那就等待下一次while(continue)
+				continue;
+			else if (b_err == 1)	//一旦之前成功拿到数据
+			{
+				//多线程并行进行图像预处理
+				if (this_cam->isSaving)
+				{
+					char filename[50];
+					sprintf(filename, "Frame%05d.bmp", frameNum);
+					imwrite(filename, image);
+				}
 			}
 		}
+		num_circle++;
 	}
 	return 0;
 }
 
 
 // the function can get the image from the deque
-int getImage(Camera* this_cam,Mat & image,int nextThreadNum)
+int getImage(Camera* this_cam, Mat & image, int threadNum, int nextThreadNum)
 {
-	int b_err;
-	if (!this_cam->threadState[THREADNUM])//判断当前的线程状态，如果线程已经被关闭，
-
+	//判断当前的线程状态，如果线程已经被关闭
+	if (!this_cam->proThreadState[threadNum])
 	{
-		SetEvent(this_cam->NextProcess[THREADNUM]);//就通知下面的线程不要堵塞再等待之后，再自行关闭。
+		SetEvent(this_cam->NextProcess[nextThreadNum]);//就通知下面的线程不要堵塞再等待之后，循环关闭所有线程
 		return -1;
 	}
-	WaitForSingleObject(this_cam->g_mtx_swap, INFINITE);//这个市对于堆栈线程的操作锁，保证
-														//同时只有一个线程在访问该堆栈数据
 	if (!this_cam->processSequ.empty())//判断当前用于处理的堆栈是否为空
 	{
 		//若不空
-		image = this_cam->processSequ.front();//提取序列最前图像
-		this_cam->processSequ.pop_front();//排出已提取图像
-		ReleaseMutex(this_cam->g_mtx_swap);//释放锁定信号量
-
+		image = this_cam->processSequ.front();			//提取序列最前图像
+		this_cam->processSequ.pop_front();				//排出已提取图像
+		SetEvent(this_cam->NextProcess[nextThreadNum]);	//已成功提取图像 那么可以开启下一个线程接着读入图像
+		return 1;
 	}
 	else
 	{
 		//若为空
-		SetEvent(this_cam->swap);//置换
-		ReleaseMutex(this_cam->g_mtx_swap);//锁定堆栈
-
-		if (WaitForSingleObject(this_cam->swapOver, 100) == WAIT_OBJECT_0)
-			//这个为置换成果信号，由于会存在图像采集停止，所以等待100ms
+		SetEvent(this_cam->swap);					//开启置换功能
+		if (WaitForSingleObject(this_cam->swapOver, 100) == WAIT_OBJECT_0)	//这个为置换成果信号，由于会存在图像采集停止，所以等待100ms
 		{
-			ResetEvent(this_cam->swapOver);//重置信号
-			WaitForSingleObject(this_cam->g_mtx_swap, INFINITE);//锁定
-			if (!this_cam->processSequ.empty())//判断是否为空，一般不为空
+			ResetEvent(this_cam->swapOver);				//重置信号
+			if (!this_cam->processSequ.empty())			//判断是否为空，一般不为空 如果为空则停止该线程？
 			{
-				image = this_cam->processSequ.front();//提取数据
-				this_cam->processSequ.pop_front();
-
+				image = this_cam->processSequ.front();			//提取序列最前图像
+				this_cam->processSequ.pop_front();				//排出已提取图像
+				SetEvent(this_cam->NextProcess[nextThreadNum]);	//已成功提取图像 那么可以开启下一个线程接着读入图像
+				return 1;
 			}
-			ReleaseMutex(this_cam->g_mtx_swap);
+			else
+			{
+				SetEvent(this_cam->NextProcess[nextThreadNum]);	//尽管没有读取图像 但是我们可以跳过这一帧的处理过程，等待下一次
+				return 0;
+			}
 		}
 		else
 		{
-			//没有等待交换成果，默认为没有新的图像进入，不过一般这种情况不会出现
-			//这个是一个用来备用调试的选项
-			WaitForSingleObject(this_cam->g_mtx_swap, INFINITE);
-
-			ReleaseMutex(this_cam->g_mtx_swap);
+			//没有等待交换成果，默认为没有新的图像进入，不过一般这种情况不会出现 这个是一个用来备用调试的选项
 			SetEvent(this_cam->NextProcess[nextThreadNum]);
-			b_err = 1;
+			return 1;
 		}
 	}
-	return b_err;
-} 
+}

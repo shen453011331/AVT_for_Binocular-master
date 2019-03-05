@@ -63,6 +63,7 @@ public:
 	CEdit _right_expose_value;
 	CEdit _frame_set_l;
 	CEdit _frame_set_r;
+	CButton _is_saving;
 
 	afx_msg void OnSelchangeCmbTrigger();
 	afx_msg void OnBnClickedBtnopenleft();
@@ -79,6 +80,8 @@ public:
 	//对Log进行添加
 	void append_log(std::string& log_data);
 	afx_msg void OnBnClickedBtnSetexposer();
+	afx_msg void OnBnClickedChkIssaving();
+
 };
 
 //单相机 单线程采集函数
