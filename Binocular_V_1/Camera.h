@@ -5,8 +5,9 @@
 #include <string>
 //在主函数里 可以弹出窗口 用来显示 显示相关的函数 放在显示的DLG中
 //也可以直接执行相机类的方法，不显示图像，只显示相机的基本信息
-#include <opencv2/opencv.hpp>
-//#include <deque>
+#include "opencv2\opencv.hpp"
+#include <deque>
+
 using namespace cv;
 using namespace std;
 
