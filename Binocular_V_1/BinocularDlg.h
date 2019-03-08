@@ -7,6 +7,7 @@
 #include "Camera.h"
 
 #include <string>
+#include "afxeditbrowsectrl.h"
 
 #define CAM_FINDER_TIMER_ID		1			//用于动态发现是否有相机接入/拔出的TIMER
 #define CAM_FRAMERATE_GET_ID    2			//用于动态获得相机图像张数的TIMER
@@ -64,6 +65,7 @@ public:
 	CEdit _frame_set_l;
 	CEdit _frame_set_r;
 	CButton _is_saving;
+	CMFCEditBrowseCtrl _dir_path;
 
 	afx_msg void OnSelchangeCmbTrigger();
 	afx_msg void OnBnClickedBtnopenleft();
@@ -73,15 +75,15 @@ public:
 	afx_msg void OnBnClickedBtnStartacq();
 	afx_msg void OnBnClickedBtnStopacq();
 	afx_msg void OnBnClickedBtnSetexposel();
+	afx_msg void OnBnClickedBtnSetexposer();
+	afx_msg void OnBnClickedChkIssaving();
+	afx_msg void OnEnChangeMfceditbrowse1();
 
 	CRITICAL_SECTION Log_Protection;		//日志单线程操作需要的保护
 
-	//各种有用的函数
+	//各种有用的函数 今后可以添加在这里
 	//对Log进行添加
 	void append_log(std::string& log_data);
-	afx_msg void OnBnClickedBtnSetexposer();
-	afx_msg void OnBnClickedChkIssaving();
-
 };
 
 //单相机 单线程采集函数

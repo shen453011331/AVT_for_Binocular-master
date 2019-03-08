@@ -65,6 +65,8 @@ public:
 	bool ChangeExposeValue(unsigned long evalue);	//改变曝光值
 
 
+
+
 	//多线程信号量
 	HANDLE sequenceVacant, sequenceBusy;		//用于进行相机回调和压入队列的线程间处理控制
 	HANDLE swap, swapOver;						//用于堆栈交换的控制量
@@ -74,6 +76,12 @@ public:
 	int acqThreadState;
 	BYTE* Seq_Buffer;							//用于存入堆栈的图像buffer指针
 	deque<Mat> frameSequ, processSequ;			//用于进行堆栈和处理的图像队列
+	void InitThreads();		//初始化所有线程
+	void CloseThreads();	//关闭所有线程
+
+	//存图的位置
+	CString filepath;
+	unsigned long saving_number;
 };
 
 struct syInfo
@@ -87,4 +95,4 @@ void __stdcall FrameDoneCB(tPvFrame* pFrame);
 
 DWORD WINAPI SeqThread(LPVOID param);
 DWORD WINAPI ProThread(LPVOID param);
-int getImage(Camera* this_cam, Mat & image, int thread, int nextThreadNum);
+int getImage(Camera* this_cam, Mat & image, int thread);

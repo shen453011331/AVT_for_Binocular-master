@@ -1,6 +1,8 @@
 #include "stdafx.h"
 #include "Camera.h"
 #include <string>
+#include <thread>
+
 
 using namespace std;
 //标准的空白构造函数
@@ -48,18 +50,10 @@ Camera::Camera(tPvUint32 ip_addr, std::string cam_name)
 	TrigerMode = 0;
 	FrameCount = 0;
 	outLog = "Camera " + CameraName + " has been created.";
-
+	filepath = "";
 	//初始化交换buffer
 	Seq_Buffer = NULL;
-	//初始化各类信号量
-	for (int tNum = 0; tNum < THREADNUM; tNum++)
-	{
-		NextProcess[tNum] = CreateEvent(NULL, TRUE, FALSE, NULL);		//初始化都为false
-	}
-	sequenceBusy = CreateEvent(NULL, TRUE, FALSE, NULL);		//设置为false
-	sequenceVacant = CreateEvent(NULL, TRUE, TRUE, NULL);		//设置为true
-	swap = CreateEvent(NULL, TRUE, FALSE, NULL);				//设置为false
-	swapOver = CreateEvent(NULL, TRUE, FALSE, NULL);			//设置为true
+	saving_number = 0;
 }
 
 bool Camera::AttrSet(AttrType attrtype, const char* name, const char* value)
@@ -376,15 +370,9 @@ bool Camera::StartCapture()
 		//队列构建完毕 开始读图
 		if (ErrCode == ePvErrSuccess)
 		{
+			InitThreads();
 			//已知相机的规格和图像大小 首先建立一个Seq_buffer的大小，以后这个buffer就固定了
 			Seq_Buffer = new unsigned char[Width*Height];
-
-			//开启处理和队列flag,开启后开启它 关闭先关闭它
-			seqThreadState = 1;
-			acqThreadState = 1;
-			for (i = 0; i < THREADNUM; i++)
-				proThreadState[i] = 1;
-			SetEvent(NextProcess[0]);	//开启第一个的处理线程
 			//建立两组线程 一个是单线程 用于拷贝
 			DWORD id;
 			CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)SeqThread, this, 0, &id);
@@ -436,16 +424,10 @@ bool Camera::CloseCapture()
 	{
 		Err = PvCommandRun(H_Camera, "AcquisitionStop");
 		Sleep(200);	//停止200ms 
-
-		//关闭线程
-		acqThreadState = 0;	//这个直接就可以导致采集线程停止 因为采集线程依靠这个使每个CB函数都退出
-		seqThreadState = 0;	//这个直接就可以导致队列线程停止 因为队列线程是依靠这个量无限循环的 直接return0
-		for (i = 0; i < THREADNUM; i++)
-			proThreadState[i] = 0;		//这个直接可以导致处理线程停止 因为处理线程是靠这个量无限循环的 直接return0
-
-		//等待所有线程结束 110>100
-		Sleep(110);
-		//以上内容可以放在一个threadClose()函数里
+		CloseThreads();	//关闭所有线程
+		//删除内存中的图
+		delete[]Seq_Buffer;
+		Seq_Buffer = NULL;
 		if (Err == ePvErrSuccess)
 		{
 			Err = PvCaptureQueueClear(H_Camera);		//2、CaptureQueueClear
@@ -499,6 +481,7 @@ bool Camera::CloseCapture()
 	else
 	{
 		outLog = "Camera is not on Capturing. Camera " + CameraName;
+		return true;
 	}
 }
 
@@ -558,6 +541,44 @@ bool Camera::ChangeExposeValue(unsigned long evalue)
 	}
 }
 
+void Camera::InitThreads()
+{
+	//开启处理和队列flag,开启后开启它 关闭先关闭它
+	seqThreadState = 1;
+	acqThreadState = 1;
+	for (int i = 0; i < THREADNUM; i++)
+		proThreadState[i] = 1;
+
+	//初始化各类信号量
+	for (int tNum = 0; tNum < THREADNUM; tNum++)
+		NextProcess[tNum] = CreateEvent(NULL, TRUE, FALSE, NULL);		//初始化都为false
+	sequenceBusy = CreateEvent(NULL, TRUE, FALSE, NULL);		//设置为false
+	sequenceVacant = CreateEvent(NULL, TRUE, TRUE, NULL);		//设置为true
+	swap = CreateEvent(NULL, TRUE, FALSE, NULL);				//设置为false
+	swapOver = CreateEvent(NULL, TRUE, FALSE, NULL);			//设置为true
+
+	SetEvent(NextProcess[0]);	//开启第一个的处理线程
+}
+
+void Camera::CloseThreads()
+{
+	//关闭线程
+	acqThreadState = 0;	//这个直接就可以导致采集线程停止 因为采集线程依靠这个使每个CB函数都退出
+	seqThreadState = 0;	//这个直接就可以导致队列线程停止 因为队列线程是依靠这个量无限循环的 直接return0
+	for (int i = 0; i < THREADNUM; i++)
+		proThreadState[i] = 0;		//这个直接可以导致处理线程停止 因为处理线程是靠这个量无限循环的 直接return0
+
+	//等待所有线程结束 110>100
+	Sleep(110);
+	//关闭所有信号量 
+	for (int i = 0; i < THREADNUM; i++)
+		CloseHandle(NextProcess[i]);
+	CloseHandle(sequenceBusy);
+	CloseHandle(sequenceVacant);
+	CloseHandle(swap);
+	CloseHandle(swapOver);
+}
+
 //相机每一帧采集完成后 对每一帧数据进行的操作 基本操作是将处理完的数据重新排回帧队列中 这个必须放在类外
 //相机50hz最大 20ms一帧的处理速度
 void __stdcall FrameDoneCB(tPvFrame * pFrame)
@@ -611,8 +632,6 @@ DWORD WINAPI ProThread(LPVOID param)
 {
 	syInfo* t_info1 = (syInfo*)param;			//用于进行线程传入量
 	int threadNum = t_info1->num;				//代表当前线程的线程数
-	CString num_s;
-	num_s.Format("%d", threadNum);
 	int nextThreadNum = 0;						//用于将线程循环起来，每一个线程找到其对应的下一个线程。
 	Camera* this_cam = (Camera*)t_info1->ptr;	//本相机指针
 	if (threadNum == THREADNUM - 1)
@@ -621,7 +640,6 @@ DWORD WINAPI ProThread(LPVOID param)
 		nextThreadNum = threadNum + 1;
 	Mat image;									//这个是用来保存获取进入当前线程图像的临时文件
 
-	int num_circle = 0;							//这个用来表示当前线程的循环次数，用于计算进入当前线程的图像文件序号
 	while (this_cam->proThreadState[threadNum] > 0)
 	{		
 		int b_err = 0;
@@ -629,45 +647,57 @@ DWORD WINAPI ProThread(LPVOID param)
 		if (WaitForSingleObject(this_cam->NextProcess[threadNum], INFINITE) == WAIT_OBJECT_0)
 			//用来接收上一个线程的信号，即上一个线程通知下一个线程可以开始对队列中图像进行预处理
 		{
-			ResetEvent(this_cam->NextProcess[threadNum]);				//重置信号量
-			b_err = getImage(this_cam, image, threadNum, nextThreadNum);//调用获取图像的函数 并且设置下一个线程信号量
+			ResetEvent(this_cam->NextProcess[threadNum]);				//重置本线程信号量
+			b_err = getImage(this_cam, image, threadNum);//调用获取图像的函数 并且设置下一个线程信号量
+			//SetEvent(this_cam->NextProcess[nextThreadNum]);					//开启下一个线程的运行过程
 			//这里是并行存储
 			if (b_err == -1)		//如果线程要停止了，那就彻底停止该线程并退出(break)
-				break;
-			else if (b_err == 0)	//如果因交换失败而拿不到数据，那就等待下一次while(continue)
-				continue;
-			else if (b_err == 1)	//一旦之前成功拿到数据
 			{
+				SetEvent(this_cam->NextProcess[nextThreadNum]);					//开启下一个线程，导致所有线程关闭
+				break;
+			}
+			else if (b_err == 0)	//如果因交换失败而拿不到数据，那就等待下一次while(continue)
+			{
+				SetEvent(this_cam->NextProcess[threadNum]);					//让本线程继续跑
+				continue;
+			}
+				
+			else if (b_err == 1)	//一旦之前成功拿到数据
+			{				
+				SetEvent(this_cam->NextProcess[nextThreadNum]);				//获得图像成功，让位置给下一个线程
 				//多线程并行进行图像预处理
 				if (this_cam->isSaving)
 				{
 					char filename[50];
 					sprintf(filename, "Frame%05d.bmp", frameNum);
-					imwrite(filename, image);
+					string filename_all = this_cam->filepath + "\\" + /*this_cam->CameraName + "\\" + */filename;
+					imwrite(filename_all, image);
+					this_cam->saving_number;
 				}
+				
 			}
 		}
-		num_circle++;
+
 	}
 	return 0;
 }
 
 
 // the function can get the image from the deque
-int getImage(Camera* this_cam, Mat & image, int threadNum, int nextThreadNum)
+int getImage(Camera* this_cam, Mat & image, int threadNum)
 {
 	//判断当前的线程状态，如果线程已经被关闭
 	if (!this_cam->proThreadState[threadNum])
 	{
-		SetEvent(this_cam->NextProcess[nextThreadNum]);//就通知下面的线程不要堵塞再等待之后，循环关闭所有线程
+		//就通知下面的线程不要堵塞再等待之后，循环关闭所有线程
 		return -1;
 	}
 	if (!this_cam->processSequ.empty())//判断当前用于处理的堆栈是否为空
 	{
 		//若不空
-		image = this_cam->processSequ.front();			//提取序列最前图像
+		image = this_cam->processSequ.front();			//提取序列最前图像		这里是浅拷贝，但是由于图像被pop了，所以并不影响，对image处理完是否会被处理掉，是否会造成内存泄露？并不影响程序运行
 		this_cam->processSequ.pop_front();				//排出已提取图像
-		SetEvent(this_cam->NextProcess[nextThreadNum]);	//已成功提取图像 那么可以开启下一个线程接着读入图像
+		//已成功提取图像 那么可以开启下一个线程接着读入图像
 		return 1;
 	}
 	else
@@ -679,22 +709,21 @@ int getImage(Camera* this_cam, Mat & image, int threadNum, int nextThreadNum)
 			ResetEvent(this_cam->swapOver);				//重置信号
 			if (!this_cam->processSequ.empty())			//判断是否为空，一般不为空 如果为空则停止该线程？
 			{
-				image = this_cam->processSequ.front();			//提取序列最前图像
-				this_cam->processSequ.pop_front();				//排出已提取图像
-				SetEvent(this_cam->NextProcess[nextThreadNum]);	//已成功提取图像 那么可以开启下一个线程接着读入图像
+				image = this_cam->processSequ.front();	//提取序列最前图像
+				this_cam->processSequ.pop_front();		//排出已提取图像
+					//已成功提取图像 那么可以开启下一个线程接着读入图像
 				return 1;
 			}
 			else
 			{
-				SetEvent(this_cam->NextProcess[nextThreadNum]);	//尽管没有读取图像 但是我们可以跳过这一帧的处理过程，等待下一次
+				//尽管没有读取图像 但是我们可以跳过这一帧的处理过程，等待下一次
 				return 0;
 			}
 		}
 		else
 		{
 			//没有等待交换成果，默认为没有新的图像进入，不过一般这种情况不会出现 这个是一个用来备用调试的选项
-			SetEvent(this_cam->NextProcess[nextThreadNum]);
-			return 1;
+			return 0;
 		}
 	}
 }

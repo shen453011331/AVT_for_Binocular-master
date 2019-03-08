@@ -5,6 +5,7 @@
 #include "afxdialogex.h"
 
 #include <string>
+#include <thread>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -76,6 +77,7 @@ void CBinocularDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_EDT_FRAMESETL, _frame_set_l);
 	DDX_Control(pDX, IDC_EDT_FRAMESETR, _frame_set_r);
 	DDX_Control(pDX, IDC_CHK_ISSAVING, _is_saving);
+	DDX_Control(pDX, IDC_MFCEDITBROWSE1, _dir_path);
 }
 
 BEGIN_MESSAGE_MAP(CBinocularDlg, CDialogEx)
@@ -93,6 +95,7 @@ BEGIN_MESSAGE_MAP(CBinocularDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BTN_SETEXPOSEL, &CBinocularDlg::OnBnClickedBtnSetexposel)
 	ON_BN_CLICKED(IDC_BTN_SETEXPOSER, &CBinocularDlg::OnBnClickedBtnSetexposer)
 	ON_BN_CLICKED(IDC_CHK_ISSAVING, &CBinocularDlg::OnBnClickedChkIssaving)
+	ON_EN_CHANGE(IDC_MFCEDITBROWSE1, &CBinocularDlg::OnEnChangeMfceditbrowse1)
 END_MESSAGE_MAP()
 
 
@@ -238,6 +241,7 @@ void CBinocularDlg::OnBnClickedBtnopenleft()
 	{
 		left_Camera = new Camera(htonl(_left_ip), "Left");
 		left_Camera->isSaving = _is_saving.GetCheck();
+		_dir_path.GetWindowTextA(left_Camera->filepath);
 		if (!left_Camera->Open())
 		{
 			append_log(left_Camera->outLog);
@@ -256,6 +260,7 @@ void CBinocularDlg::OnBnClickedBtnopenleft()
 		OnBnClickedBtncloseright();
 		left_Camera = new Camera(htonl(_left_ip), "Left");
 		left_Camera->isSaving = _is_saving.GetCheck();
+		_dir_path.GetWindowTextA(left_Camera->filepath);
 		if (!left_Camera->Open())
 		{
 			append_log(left_Camera->outLog);
@@ -298,6 +303,7 @@ void CBinocularDlg::OnBnClickedBtnopenright()
 	{
 		right_Camera = new Camera(htonl(_right_ip), "Right");
 		right_Camera->isSaving = _is_saving.GetCheck();
+		_dir_path.GetWindowTextA(right_Camera->filepath);
 		if (!right_Camera->Open())
 		{
 			append_log(right_Camera->outLog);
@@ -315,6 +321,7 @@ void CBinocularDlg::OnBnClickedBtnopenright()
 		OnBnClickedBtncloseright();
 		right_Camera = new Camera(htonl(_right_ip), "Right");
 		right_Camera->isSaving = _is_saving.GetCheck();
+		_dir_path.GetWindowTextA(right_Camera->filepath);
 		if (!right_Camera->Open())
 		{
 			append_log(right_Camera->outLog);
@@ -539,7 +546,6 @@ void CBinocularDlg::OnBnClickedBtnSetexposer()
 	}
 }
 
-
 void CBinocularDlg::OnBnClickedChkIssaving()
 {
 	// TODO: 在此添加控件通知处理程序代码
@@ -552,3 +558,21 @@ void CBinocularDlg::OnBnClickedChkIssaving()
 		right_Camera->isSaving = _is_saving.GetCheck();
 	}
 }
+
+
+
+void CBinocularDlg::OnEnChangeMfceditbrowse1()
+{
+	// TODO:  如果该控件是 RICHEDIT 控件，它将不
+	// 发送此通知，除非重写 CDialogEx::OnInitDialog()
+	// 函数并调用 CRichEditCtrl().SetEventMask()，
+	// 同时将 ENM_CHANGE 标志“或”运算到掩码中。
+
+	// TODO:  在此添加控件通知处理程序代码
+	//获取文件夹路径
+	if (left_Camera)
+		_dir_path.GetWindowTextA(left_Camera->filepath);
+	if (right_Camera)
+		_dir_path.GetWindowTextA(right_Camera->filepath);
+}
+
