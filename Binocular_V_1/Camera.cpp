@@ -53,7 +53,6 @@ Camera::Camera(tPvUint32 ip_addr, std::string cam_name)
 	filepath = "";
 	//初始化交换buffer
 	Seq_Buffer = NULL;
-	saving_number = 0;
 }
 
 bool Camera::AttrSet(AttrType attrtype, const char* name, const char* value)
@@ -310,9 +309,6 @@ bool Camera::StartCapture()
 		delete[] pFrames;
 		return false;
 	}
-	
-
-
 
 	//开始接收图像
 	if (PvCaptureStart(H_Camera) == ePvErrSuccess)
@@ -639,17 +635,18 @@ DWORD WINAPI ProThread(LPVOID param)
 	else
 		nextThreadNum = threadNum + 1;
 	Mat image;									//这个是用来保存获取进入当前线程图像的临时文件
-
+	int saving_circle = 0;
+	int frame_circle = 0;
 	while (this_cam->proThreadState[threadNum] > 0)
 	{		
 		int b_err = 0;
-		int frameNum = threadNum + 1 + num_circle*THREADNUM;//通过循环次数，获取图像序号 这就是用来存储图像的而已
+		int SavingNum = threadNum + 1 + saving_circle*THREADNUM;//通过循环次数，获取图像序号 这就是用来存储图像的而已
+		int FrameNum = threadNum + 1 + frame_circle*THREADNUM;
 		if (WaitForSingleObject(this_cam->NextProcess[threadNum], INFINITE) == WAIT_OBJECT_0)
 			//用来接收上一个线程的信号，即上一个线程通知下一个线程可以开始对队列中图像进行预处理
 		{
 			ResetEvent(this_cam->NextProcess[threadNum]);				//重置本线程信号量
 			b_err = getImage(this_cam, image, threadNum);//调用获取图像的函数 并且设置下一个线程信号量
-			//SetEvent(this_cam->NextProcess[nextThreadNum]);					//开启下一个线程的运行过程
 			//这里是并行存储
 			if (b_err == -1)		//如果线程要停止了，那就彻底停止该线程并退出(break)
 			{
@@ -669,15 +666,14 @@ DWORD WINAPI ProThread(LPVOID param)
 				if (this_cam->isSaving)
 				{
 					char filename[50];
-					sprintf(filename, "Frame%05d.bmp", frameNum);
+					sprintf(filename, "Frame%05d_%05d.bmp", SavingNum,FrameNum);	//第一个为存图的数量	第二个为获取图的数量
 					string filename_all = this_cam->filepath + "\\" + /*this_cam->CameraName + "\\" + */filename;
 					imwrite(filename_all, image);
-					this_cam->saving_number;
+					saving_circle++;
 				}
-				
+				frame_circle++;
 			}
 		}
-
 	}
 	return 0;
 }

@@ -255,7 +255,7 @@ void CBinocularDlg::OnBnClickedBtnopenleft()
 		}
 			
 	}
-	else if (_left_ip != left_Camera->IpAddr)	//如果相机存在 但IP不是 那么停止过去的相机 建立新的相机
+	else if (htonl(_left_ip) != left_Camera->IpAddr)	//如果相机存在 但IP不是 那么停止过去的相机 建立新的相机
 	{
 		OnBnClickedBtncloseright();
 		left_Camera = new Camera(htonl(_left_ip), "Left");
@@ -316,7 +316,7 @@ void CBinocularDlg::OnBnClickedBtnopenright()
 			OnSelchangeCmbTrigger();
 		}
 	}
-	else if (_right_ip != right_Camera->IpAddr)	//如果相机存在 但IP不是 那么停止过去的相机 建立新的相机
+	else if (htonl(_right_ip) != right_Camera->IpAddr)	//如果相机存在 但IP不是 那么停止过去的相机 建立新的相机
 	{
 		OnBnClickedBtncloseright();
 		right_Camera = new Camera(htonl(_right_ip), "Right");

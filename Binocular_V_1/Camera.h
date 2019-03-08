@@ -81,7 +81,6 @@ public:
 
 	//´æÍ¼µÄÎ»ÖÃ
 	CString filepath;
-	unsigned long saving_number;
 };
 
 struct syInfo
