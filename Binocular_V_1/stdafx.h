@@ -32,6 +32,9 @@
 
 #include <afxcontrolbars.h>     // 功能区和控件条的 MFC 支持
 
+/*一些项目中的稳定文件*/
+//相机接口
+#include <PvApi.h>
 
 
 

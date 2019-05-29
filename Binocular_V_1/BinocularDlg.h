@@ -4,13 +4,17 @@
 
 #pragma once
 #include "afxwin.h"
+//自定义的 相机类
 #include "Camera.h"
+//自定义的 投影仪类
+#include "Projector.h"
 
 #include <string>
 #include "afxeditbrowsectrl.h"
 
 #define CAM_FINDER_TIMER_ID		1			//用于动态发现是否有相机接入/拔出的TIMER
 #define CAM_FRAMERATE_GET_ID    2			//用于动态获得相机图像张数的TIMER
+#define PROJ_FINDER_TIMER_ID	3			//用于动态发现是否有投影仪接入/拔出的TIMER
 #define MAX_CAMERA_NUM 20
 // CBinocularDlg 对话框
 class CBinocularDlg : public CDialogEx
@@ -27,6 +31,7 @@ public:
 	//一些重要的变量
 	Camera* left_Camera;
 	Camera* right_Camera;
+	Projector* projector;
 	unsigned long cam_online_num;
 	std::string log_buffer;
 	CWinThread* left_thread;
@@ -66,6 +71,10 @@ public:
 	CEdit _frame_set_r;
 	CButton _is_saving;
 	CMFCEditBrowseCtrl _dir_path;
+	CMFCEditBrowseCtrl _ini_path;
+
+	CButton _btn_connectproj;
+	CButton _btn_closeproj;
 
 	afx_msg void OnSelchangeCmbTrigger();
 	afx_msg void OnBnClickedBtnopenleft();
@@ -78,12 +87,14 @@ public:
 	afx_msg void OnBnClickedBtnSetexposer();
 	afx_msg void OnBnClickedChkIssaving();
 	afx_msg void OnEnChangeMfceditbrowse1();
+	afx_msg void OnBnClickedBtnStartexp();
+	afx_msg void OnEnChangeMfceditbrowse2();
 
 	CRITICAL_SECTION Log_Protection;		//日志单线程操作需要的保护
 
 	//各种有用的函数 今后可以添加在这里
-	//对Log进行添加
-	void append_log(std::string& log_data);
+	void append_log(std::string& log_data);		//对Log进行添加
+	void update_projector_status();				//更新投影仪的状态信息
 };
 
 //单相机 单线程采集函数

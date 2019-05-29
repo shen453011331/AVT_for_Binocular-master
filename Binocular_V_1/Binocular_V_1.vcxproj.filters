@@ -13,6 +13,15 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="dlpc350">
+      <UniqueIdentifier>{75bd80ad-40b9-4912-ae3d-f4631a64f7dc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="dlpc350\head">
+      <UniqueIdentifier>{41624a10-42b9-4821-88d9-64006472658c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="dlpc350\source">
+      <UniqueIdentifier>{eb73b647-6828-4216-8bdc-6fb62575d3e5}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="ReadMe.txt" />
@@ -36,6 +45,36 @@
     <ClInclude Include="targetver.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="PvApi.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Projector.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="dlpc350\dlpc350_api.h">
+      <Filter>dlpc350\head</Filter>
+    </ClInclude>
+    <ClInclude Include="dlpc350\dlpc350_BMPParser.h">
+      <Filter>dlpc350\head</Filter>
+    </ClInclude>
+    <ClInclude Include="dlpc350\dlpc350_common.h">
+      <Filter>dlpc350\head</Filter>
+    </ClInclude>
+    <ClInclude Include="dlpc350\dlpc350_error.h">
+      <Filter>dlpc350\head</Filter>
+    </ClInclude>
+    <ClInclude Include="dlpc350\dlpc350_firmware.h">
+      <Filter>dlpc350\head</Filter>
+    </ClInclude>
+    <ClInclude Include="dlpc350\dlpc350_flashDevice.h">
+      <Filter>dlpc350\head</Filter>
+    </ClInclude>
+    <ClInclude Include="dlpc350\dlpc350_usb.h">
+      <Filter>dlpc350\head</Filter>
+    </ClInclude>
+    <ClInclude Include="dlpc350\dlpc350_version.h">
+      <Filter>dlpc350\head</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Binocular_V_1.cpp">
@@ -49,6 +88,24 @@
     </ClCompile>
     <ClCompile Include="Camera.cpp">
       <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Projector.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="dlpc350\dlpc350_api.cpp">
+      <Filter>dlpc350\source</Filter>
+    </ClCompile>
+    <ClCompile Include="dlpc350\dlpc350_BMPParser.cpp">
+      <Filter>dlpc350\source</Filter>
+    </ClCompile>
+    <ClCompile Include="dlpc350\dlpc350_common.cpp">
+      <Filter>dlpc350\source</Filter>
+    </ClCompile>
+    <ClCompile Include="dlpc350\dlpc350_firmware.cpp">
+      <Filter>dlpc350\source</Filter>
+    </ClCompile>
+    <ClCompile Include="dlpc350\dlpc350_usb.cpp">
+      <Filter>dlpc350\source</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

@@ -1,11 +1,8 @@
 #pragma once
-//纯相机类 用于相机的唯一标识 参数设置 以及信息通讯
-#include "PvApi.h"
-
-#include <string>
 //在主函数里 可以弹出窗口 用来显示 显示相关的函数 放在显示的DLG中
 //也可以直接执行相机类的方法，不显示图像，只显示相机的基本信息
 #include "opencv2\opencv.hpp"
+#include <string>
 #include <deque>
 
 using namespace cv;

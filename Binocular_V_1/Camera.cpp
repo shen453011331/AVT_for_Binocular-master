@@ -667,7 +667,7 @@ DWORD WINAPI ProThread(LPVOID param)
 				{
 					char filename[50];
 					sprintf(filename, "Frame%05d_%05d.bmp", SavingNum,FrameNum);	//第一个为存图的数量	第二个为获取图的数量
-					string filename_all = this_cam->filepath + "\\" + /*this_cam->CameraName + "\\" + */filename;
+					string filename_all = this_cam->filepath + "\\" + this_cam->CameraName + "\\" + filename;
 					imwrite(filename_all, image);
 					saving_circle++;
 				}

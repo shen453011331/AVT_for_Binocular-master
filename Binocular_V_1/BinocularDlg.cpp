@@ -7,6 +7,9 @@
 #include <string>
 #include <thread>
 
+#include <io.h>
+#include <direct.h>
+
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -58,6 +61,7 @@ CBinocularDlg::~CBinocularDlg()
 	//关闭定时器
 	KillTimer(CAM_FINDER_TIMER_ID);
 	KillTimer(CAM_FRAMERATE_GET_ID);
+	KillTimer(PROJ_FINDER_TIMER_ID);
 	//关闭特殊区域
 	DeleteCriticalSection(&Log_Protection);
 }
@@ -78,6 +82,9 @@ void CBinocularDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_EDT_FRAMESETR, _frame_set_r);
 	DDX_Control(pDX, IDC_CHK_ISSAVING, _is_saving);
 	DDX_Control(pDX, IDC_MFCEDITBROWSE1, _dir_path);
+	DDX_Control(pDX, IDC_MFCEDITBROWSE2, _ini_path);
+	DDX_Control(pDX, IDC_BTN_CONNECTPROJ, _btn_connectproj);
+	DDX_Control(pDX, IDC_BTN_CLOSEPROJ, _btn_closeproj);
 }
 
 BEGIN_MESSAGE_MAP(CBinocularDlg, CDialogEx)
@@ -96,6 +103,8 @@ BEGIN_MESSAGE_MAP(CBinocularDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BTN_SETEXPOSER, &CBinocularDlg::OnBnClickedBtnSetexposer)
 	ON_BN_CLICKED(IDC_CHK_ISSAVING, &CBinocularDlg::OnBnClickedChkIssaving)
 	ON_EN_CHANGE(IDC_MFCEDITBROWSE1, &CBinocularDlg::OnEnChangeMfceditbrowse1)
+	ON_BN_CLICKED(IDC_BTN_STARTEXP, &CBinocularDlg::OnBnClickedBtnStartexp)
+	ON_EN_CHANGE(IDC_MFCEDITBROWSE2, &CBinocularDlg::OnEnChangeMfceditbrowse2)
 END_MESSAGE_MAP()
 
 
@@ -127,6 +136,7 @@ BOOL CBinocularDlg::OnInitDialog()
 
 	// TODO: 在此添加额外的初始化代码
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	_ini_path.EnableFileBrowseButton(_T(""), _T("ini Files(*.ini)|*.ini|All Files (*.*)|*.*||"));
 	//所有Pv函数在使用前 需要添加PvInitialize()
 	PvInitialize();
 
@@ -145,9 +155,13 @@ BOOL CBinocularDlg::OnInitDialog()
 	//开启关键区域
 	InitializeCriticalSection(&Log_Protection);
 
+	//初始化投影仪
+	projector = new Projector();
+	
 	//开启定时器
 	SetTimer(CAM_FINDER_TIMER_ID, 1000, 0);
 	SetTimer(CAM_FRAMERATE_GET_ID, 1000, 0);
+	SetTimer(PROJ_FINDER_TIMER_ID, 1000, 0);
 	append_log(string("Enviroment Init Finished.\r\n"));
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
@@ -232,7 +246,7 @@ void CBinocularDlg::OnSelchangeCmbTrigger()
 	}
 }
 
-//check
+//开启左侧相机
 void CBinocularDlg::OnBnClickedBtnopenleft()
 {
 	//仅仅新建一个相机对象的实例 不采图 不过需要检测相机是否存在
@@ -277,7 +291,7 @@ void CBinocularDlg::OnBnClickedBtnopenleft()
 	//IP对应的话 按钮无效
 }
 
-//check
+//关闭左侧相机 
 void CBinocularDlg::OnBnClickedBtncloseleft()
 {
 	//销毁一个相机的实例	如果相机在采图 调用相机析构函数 理应关闭
@@ -294,7 +308,7 @@ void CBinocularDlg::OnBnClickedBtncloseleft()
 	}
 }
 
-//check
+//开启右侧相机
 void CBinocularDlg::OnBnClickedBtnopenright()
 {
 	//仅仅新建一个相机对象的实例 不采图 不过需要检测相机是否存在
@@ -337,7 +351,7 @@ void CBinocularDlg::OnBnClickedBtnopenright()
 	//IP对应的话 按钮无效 
 }
 
-//check
+//关闭右侧相机
 void CBinocularDlg::OnBnClickedBtncloseright()
 {
 	//销毁一个相机的实例	如果相机在采图 调用相机析构函数 理应关闭
@@ -354,7 +368,7 @@ void CBinocularDlg::OnBnClickedBtncloseright()
 	}
 }
 
-//同时仅运行单线程来修改Log区的日志
+//同时仅运行单线程来修改Log区的日志 防止显示混乱
 void CBinocularDlg::append_log(string & log_data)
 {
 	EnterCriticalSection(&Log_Protection);
@@ -372,6 +386,96 @@ void CBinocularDlg::append_log(string & log_data)
 	_log_ctrl.SetSel(iCount, iCount);
 	_log_ctrl.SetRedraw(TRUE);
 	LeaveCriticalSection(&Log_Protection);
+}
+
+void CBinocularDlg::update_projector_status()
+{
+	/*处理八个按钮的结果*/
+	if (projector->is_connected)
+	{
+		((CButton*)GetDlgItem(IDC_RAD_PROJISCONNECT))->SetCheck(true);
+		if (projector->is_standby)
+		{
+			((CButton*)GetDlgItem(IDC_RAD_PROJISPOWERBY))->SetCheck(true);	//待机
+			((CButton*)GetDlgItem(IDC_RAD_PROJISVIDEO))->SetCheck(false);	//视频模式
+			((CButton*)GetDlgItem(IDC_RAD_PROJISSEQ))->SetCheck(false);		//Pattern模式 只有在这个模式下，下述的状态才有效
+
+			((CButton*)GetDlgItem(IDC_RAD_ISRUNNING))->SetCheck(false);		//正在投影
+			((CButton*)GetDlgItem(IDC_RAD_ISPAUSE))->SetCheck(false);		//暂停状态
+			((CButton*)GetDlgItem(IDC_RAD_ISSTOP))->SetCheck(false);		//停止状态
+			((CButton*)GetDlgItem(IDC_RAD_VALIDPASS))->SetCheck(false);		//验证完毕状态
+		}
+		else
+		{
+			if (projector->SLmode == false)
+			{
+				((CButton*)GetDlgItem(IDC_RAD_PROJISPOWERBY))->SetCheck(false);	//待机
+				((CButton*)GetDlgItem(IDC_RAD_PROJISVIDEO))->SetCheck(true);	//视频模式
+				((CButton*)GetDlgItem(IDC_RAD_PROJISSEQ))->SetCheck(false);		//Pattern模式 只有在这个模式下，下述的状态才有效
+
+				((CButton*)GetDlgItem(IDC_RAD_ISRUNNING))->SetCheck(false);		//正在投影
+				((CButton*)GetDlgItem(IDC_RAD_ISPAUSE))->SetCheck(false);		//暂停状态
+				((CButton*)GetDlgItem(IDC_RAD_ISSTOP))->SetCheck(false);		//停止状态
+				((CButton*)GetDlgItem(IDC_RAD_VALIDPASS))->SetCheck(false);		//验证完毕状态
+			}
+			else
+			{
+				((CButton*)GetDlgItem(IDC_RAD_PROJISPOWERBY))->SetCheck(false);	//待机
+				((CButton*)GetDlgItem(IDC_RAD_PROJISVIDEO))->SetCheck(false);	//视频模式
+				((CButton*)GetDlgItem(IDC_RAD_PROJISSEQ))->SetCheck(true);		//Pattern模式 只有在这个模式下，下述的状态才有效
+				
+				projector->GetSeqStatus();
+				if (projector->action == 0)
+				{
+					((CButton*)GetDlgItem(IDC_RAD_ISRUNNING))->SetCheck(false);		//正在投影
+					((CButton*)GetDlgItem(IDC_RAD_ISPAUSE))->SetCheck(false);		//暂停状态
+					((CButton*)GetDlgItem(IDC_RAD_ISSTOP))->SetCheck(true);		//停止状态
+				}
+				else if (projector->action == 1)
+				{
+					((CButton*)GetDlgItem(IDC_RAD_ISRUNNING))->SetCheck(false);		//正在投影
+					((CButton*)GetDlgItem(IDC_RAD_ISPAUSE))->SetCheck(true);		//暂停状态
+					((CButton*)GetDlgItem(IDC_RAD_ISSTOP))->SetCheck(false);		//停止状态
+				}
+				else if (projector->action == 2)
+				{
+					((CButton*)GetDlgItem(IDC_RAD_ISRUNNING))->SetCheck(true);		//正在投影
+					((CButton*)GetDlgItem(IDC_RAD_ISPAUSE))->SetCheck(false);		//暂停状态
+					((CButton*)GetDlgItem(IDC_RAD_ISSTOP))->SetCheck(false);		//停止状态
+				}
+				else
+				{
+					((CButton*)GetDlgItem(IDC_RAD_ISRUNNING))->SetCheck(false);		//正在投影
+					((CButton*)GetDlgItem(IDC_RAD_ISPAUSE))->SetCheck(false);		//暂停状态
+					((CButton*)GetDlgItem(IDC_RAD_ISSTOP))->SetCheck(false);		//停止状态
+				}
+
+				if (projector->is_validate)
+				{
+					((CButton*)GetDlgItem(IDC_RAD_VALIDPASS))->SetCheck(true);		//验证完毕状态
+				}
+				else
+				{
+					((CButton*)GetDlgItem(IDC_RAD_VALIDPASS))->SetCheck(false);		//验证完毕状态
+				}
+			}
+		}
+
+	}
+	else
+	{
+		((CButton*)GetDlgItem(IDC_RAD_PROJISCONNECT))->SetCheck(false);	//连接
+		((CButton*)GetDlgItem(IDC_RAD_PROJISPOWERBY))->SetCheck(false);	//待机
+		((CButton*)GetDlgItem(IDC_RAD_PROJISVIDEO))->SetCheck(false);	//视频模式
+		((CButton*)GetDlgItem(IDC_RAD_PROJISSEQ))->SetCheck(false);		//Pattern模式 只有在这个模式下，下述的状态才有效
+
+		((CButton*)GetDlgItem(IDC_RAD_ISRUNNING))->SetCheck(false);		//正在投影
+		((CButton*)GetDlgItem(IDC_RAD_ISPAUSE))->SetCheck(false);		//暂停状态
+		((CButton*)GetDlgItem(IDC_RAD_ISSTOP))->SetCheck(false);		//停止状态
+		((CButton*)GetDlgItem(IDC_RAD_VALIDPASS))->SetCheck(false);		//验证完毕状态
+	}
+
+	
 }
 
 unsigned long FindCamAddLog(string& Out)
@@ -448,6 +552,17 @@ void CBinocularDlg::OnTimer(UINT_PTR uId)
 		}
 		break;
 	}
+	case PROJ_FINDER_TIMER_ID:
+	{
+		if (projector)
+		{
+			bool old_state = projector->is_connected;
+			bool new_state = projector->Discover_Timer_Call();
+			if (old_state != new_state)
+				append_log(projector->getLog());
+			update_projector_status();
+		}
+	}
 	/*
 		可以添加其他的时钟函数
 	*/
@@ -457,24 +572,41 @@ void CBinocularDlg::OnTimer(UINT_PTR uId)
 }
 
 
-//开始采集图像
+//开始采集图像 调用完成后 相机处在拍摄状态 投影仪初始化完成 并等待play
 void CBinocularDlg::OnBnClickedBtnStartacq()
 {
 	// TODO: 在此添加控件通知处理程序代码
+	if (projector->Projector_Init() == false)
+	{
+		append_log(projector->getLog());
+		return;
+	}
+	append_log(projector->getLog());
 	//为相机创建一个自己的线程
 	if (left_Camera)
 	{
-		left_thread = AfxBeginThread(Left_ThreadCapture, this);
+		if (left_Camera->isStreaming == false)
+			left_thread = AfxBeginThread(Left_ThreadCapture, this);
 	}
 	if (right_Camera)
 	{
-		right_thread = AfxBeginThread(Right_ThreadCapture, this);
+		if (right_Camera->isStreaming == false)
+			right_thread = AfxBeginThread(Right_ThreadCapture, this);
 	}
 }
 //停止采集图像
 void CBinocularDlg::OnBnClickedBtnStopacq()
 {
 	// TODO: 在此添加控件通知处理程序代码
+	//先关闭投影仪 再关闭相机
+	if (projector->Stop() == false)
+	{
+		append_log(projector->getLog());
+		//return 
+	}
+	else
+		append_log(projector->getLog());
+
 	if (left_Camera)
 	{
 		if (left_Camera->isStreaming)
@@ -559,8 +691,6 @@ void CBinocularDlg::OnBnClickedChkIssaving()
 	}
 }
 
-
-
 void CBinocularDlg::OnEnChangeMfceditbrowse1()
 {
 	// TODO:  如果该控件是 RICHEDIT 控件，它将不
@@ -569,10 +699,52 @@ void CBinocularDlg::OnEnChangeMfceditbrowse1()
 	// 同时将 ENM_CHANGE 标志“或”运算到掩码中。
 
 	// TODO:  在此添加控件通知处理程序代码
-	//获取文件夹路径
+	//幅值给现在存在的相机
 	if (left_Camera)
 		_dir_path.GetWindowTextA(left_Camera->filepath);
 	if (right_Camera)
 		_dir_path.GetWindowTextA(right_Camera->filepath);
+
+	//不论相机是否存在 先创建一个文件夹
+	CString Path;
+	_dir_path.GetWindowTextA(Path);
+	//在本文件夹下检测 是否有以相机名字命名的两个文件夹，如果有就采用。
+	CString left_Path = Path + "\\Left";
+	CString right_Path = Path + "\\Right";
+
+
+	//如果没有 新建
+	if (_access((LPSTR)(LPCTSTR)left_Path, 0) != 0)
+	{
+		_mkdir((LPSTR)(LPCTSTR)left_Path);
+	}
+	if (_access((LPSTR)(LPCTSTR)right_Path, 0) != 0)
+	{
+		_mkdir((LPSTR)(LPCTSTR)right_Path);
+	}
+}
+
+
+//开始曝光拍摄
+//注意，之前开始相机的时候，处于外触发等待的状态，这个函数之后，开始进行真正的采图
+//一共触发几次，拍摄多少张图，每张图代表是第几个相位的第几张，都是一个结构体定的。
+void CBinocularDlg::OnBnClickedBtnStartexp()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	projector->Play();
+}
+
+
+void CBinocularDlg::OnEnChangeMfceditbrowse2()
+{
+	// TODO:  如果该控件是 RICHEDIT 控件，它将不
+	// 发送此通知，除非重写 CDialogEx::OnInitDialog()
+	// 函数并调用 CRichEditCtrl().SetEventMask()，
+	// 同时将 ENM_CHANGE 标志“或”运算到掩码中。
+	
+	// TODO:  在此添加控件通知处理程序代码
+	CString _ini_cstring;
+	_ini_path.GetWindowTextA(_ini_cstring);
+	projector->ini_file_path = _ini_cstring.GetBuffer(0);
 }
 
