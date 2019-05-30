@@ -93,13 +93,13 @@ bool Projector::Discover_Timer_Call()
 		if (DLPC350_GetStatus(&HWStatus, &SysStatus, &MainStatus) != 0)
 		{
 			//have problem
-			Log += "Error: projector is connected but can not get info.\n";
+			Log = "Error: projector is connected but can not get info.\r\n";
 			is_connected = false;
 			return false;
 		}
 		else
 		{
-			Log += "projector is connected already.\n";
+			Log = "projector is connected already.\r\n";
 			is_connected = true;
 			return true;
 		}
@@ -112,7 +112,7 @@ bool Projector::Discover_Timer_Call()
 		{
 			if (DLPC350_USB_IsConnected())
 			{
-				Log += "Projector connneted.\n ";
+				Log += "Projector connneted.\r\n ";
 				//获取状态信息
 				if (Get_DLPC_Status())
 				{
@@ -131,23 +131,23 @@ bool Projector::Discover_Timer_Call()
 				}
 				else
 				{
-					sprintf(versionStr, "can not read");
+					sprintf(versionStr, "can not read.\r\n");
 				}
 
 				//获取固件的标签 tag
 				if (DLPC350_GetFirmwareTagInfo(firmwareTag) != 0)
 				{
-					sprintf((char*)firmwareTag, "can not read");
+					sprintf((char*)firmwareTag, "can not read.\r\n");
 				}
 
 				//获取投影仪中flash图像的个数
 				if (DLPC350_GetNumImagesInFlash(&numImgInFlash) == 0)
 				{
-					Log += "Flash: " + to_string(numImgInFlash) + " pictures.\n";
+					Log += "Flash: " + to_string(numImgInFlash) + " pictures.\r\n";
 				}
 				else
 				{
-					Log += "Warinning: Can not read the pic number in flash\n";
+					Log += "Warinning: Can not read the pic number in flash.\r\n";
 				}
 
 				//获取电源状态
@@ -164,16 +164,16 @@ bool Projector::Discover_Timer_Call()
 							//如果trigMode <= 2（1，2）那么应该是SLMode(我们需要的) 两种可能 一种是从flash中读取 一种是从video端口读取
 							if (trigMode <= 2)
 							{
-								Log += "Disp Mode: fixed exposure pattern,";
+								Log += "Disp Mode: fixed exposure pattern ";
 								if (DLPC350_GetPatternDisplayMode(&isExtPatDisplayMode) == 0)
 									if (isExtPatDisplayMode) //if从外界接图
 										//从video端获取parten数据
-										Log += "from Video\n";
+										Log += "from Video\r\n";
 									else
 										//从flash端读取parten数据
-										Log += "from Flash\n";
+										Log += "from Flash\r\n";
 								else
-									Log += "\nWarnning: Can not read the Display Mode.(fixed exposure)\n";
+									Log += "\r\nWarnning: Can not read the Display Mode.(fixed exposure)\r\n";
 							}
 							//其他的曝光形式
 							else
@@ -181,27 +181,27 @@ bool Projector::Discover_Timer_Call()
 								Log += "Disp Mode: variable exposure pattern,";
 								if (DLPC350_GetPatternDisplayMode(&isExtPatDisplayMode) == 0)
 									if (isExtPatDisplayMode) //if set to external DVI/FPD port
-										Log += "from Video\n";
+										Log += "from Video\r\n";
 									else					
-										Log += "from Flash\n";
+										Log += "from Flash\r\n";
 								else
-									Log += "\nWarnning: Can not read the Display Mode.(fixed exposure)\n";
+									Log += "\r\nWarnning: Can not read the Display Mode.(fixed exposure)\r\n";
 							}
 						}
 					}
 					//如果SLmode是true 那么就只能给你videoMode
 					else
 					{
-						Log += "Disp Mode: Video\n";
+						Log += "Disp Mode: Video\r\n";
 					}
 				}
 				else if(is_standby)
 				{
-					Log += "Disp Mode: power standby.\n";
+					Log += "Disp Mode: power standby.\r\n";
 				}
 				else
 				{
-					Log += "Warnning: Disp Mode getting error.\n";
+					Log += "Warnning: Disp Mode getting error.\r\n";
 				}
 
 				is_connected = true;
@@ -209,13 +209,13 @@ bool Projector::Discover_Timer_Call()
 			}
 			else
 			{
-				Log += "Connected failed, USB connect Error.\n";
+				Log += "Connected failed, USB connect Error.\r\n";
 				return false;
 			}
 		}
 		else
 		{
-			Log += "Projector connected failed.\n";
+			Log += "Projector connected failed.\r\n";
 			return false;
 		}
 	}
@@ -228,28 +228,28 @@ bool Projector::Get_DLPC_Status()
 	if (DLPC350_GetStatus(&HWStatus, &SysStatus, &MainStatus) == 0)
 	{
 		if ((HWStatus&BIT0) == BIT0)
-			Log += "HWState:Init Done.\n";
+			Log += "HWState:Init Done.\r\n";
 		if ((HWStatus&BIT3) == BIT3)
-			Log += "HWState:Forced Swap.\n";
+			Log += "HWState:Forced Swap.\r\n";
 		if ((HWStatus&BIT6) == BIT6)
-			Log += "HWState:Sequence Abort.\n";
+			Log += "HWState:Sequence Abort.\r\n";
 		if ((HWStatus&BIT2) == BIT2)
-			Log += "HWState:DRC Error.\n";
+			Log += "HWState:DRC Error.\r\n";
 		if ((HWStatus&BIT7) == BIT7)
-			Log += "HWState:Sequence Error.\n";
+			Log += "HWState:Sequence Error.\r\n";
 
 		if ((MainStatus&BIT0) == BIT0)
-			Log += "MainState:DMD parked.\n";
+			Log += "MainState:DMD parked.\r\n";
 		if ((MainStatus&BIT1) == BIT1)
-			Log += "MainState:Sequence Running.\n";
+			Log += "MainState:Sequence Running.\r\n";
 		if ((MainStatus&BIT2) == BIT2)
-			Log += "MainState:Buffer frozen\n";
+			Log += "MainState:Buffer frozen.\r\n";
 
 		return true;
 	}
 	else
 	{
-		Log += "Warnning: Cant get the state of DLPC\n";
+		Log += "Warnning: Cant get the state of DLPC.\r\n";
 		return false;
 		//没有成功获得其状态信息
 	}
@@ -261,7 +261,7 @@ bool Projector::Projector_Init()
 	//转为pattern模式
 	if (Config_PlayMode2SL())
 	{
-		Log += "Have Changed Mode to Pattern Sequence.\n";
+		Log += "Have Changed Mode to Pattern Sequence.\r\n";
 	}
 	else
 	{
@@ -277,14 +277,14 @@ bool Projector::Projector_Init()
 	//验证是否有编码
 	if (PatSeqLUT_data.size() == 0)
 	{
-		Log += "Warnning: No Pattern data aviliable.\n";
+		Log += "Warnning: No Pattern data aviliable.\r\n";
 		return false;
 	}
 	//Send to DLPC the data
 	is_validate = false;
 	if (Send_PrtSeqCode())
 	{
-		Log += "Send Pattern info over.\n";
+		Log += "Send Pattern info over.\r\n";
 	}
 	else
 	{
@@ -294,7 +294,7 @@ bool Projector::Projector_Init()
 	if (ValidatePatSeq())
 	{
 		is_validate = true;
-		Log += "Pattern Sequence Init Done.";
+		Log += "Pattern Sequence Init Done.\r\n";
 		return true;
 	}
 	else
@@ -321,7 +321,7 @@ bool Projector::Config_PlayMode2SL()
 			this_thread::sleep_for(chrono::microseconds(200));
 			if (i++ > 10)
 			{
-				Log += "Error: Reboot error, cannot change the power mode. Need Reset...\n";
+				Log += "Error: Reboot error, cannot change the power mode. Need Reset...\r\n";
 				return false;
 			}
 		}
@@ -334,7 +334,7 @@ bool Projector::Config_PlayMode2SL()
 		{
 			if (Stop())
 			{
-				Log += "Projector already in SLmode.\n ";
+				Log += "Projector already in SLmode.\r\n ";
 				return true;//停下来
 			}
 				
@@ -352,7 +352,7 @@ bool Projector::Config_PlayMode2SL()
 				DLPC350_GetMode(&SLmode);
 				if (SLmode)
 				{
-					Log += "Projector changed to SLmode.\n";
+					Log += "Projector changed to SLmode.\r\n";
 					if (Stop())
 						return true;//停下来
 					else
@@ -361,7 +361,7 @@ bool Projector::Config_PlayMode2SL()
 				this_thread::sleep_for(chrono::microseconds(100));
 				if (i++ > 5)
 				{
-					Log += "Error: Set DLPC Mode Error (SLMode).\n";
+					Log += "Error: Set DLPC Mode Error (SLMode).\r\n";
 					return false;
 				}
 			}
@@ -369,7 +369,7 @@ bool Projector::Config_PlayMode2SL()
 	}
 	else
 	{
-		Log += "Error: Get Mode error.\n";
+		Log += "Error: Get Mode error.\r\n";
 		return false;
 	}
 }
@@ -377,11 +377,11 @@ bool Projector::Config_PlayMode2SL()
 //解码ini文件中和图案序列有关的信息 这个函数更新了类上的信息，不对投影仪发信息
 bool Projector::ReadIni(const char* file_path)
 {
-	Log += "Loading from " + string(file_path)+"...\n";
+	Log += "Loading from " + string(file_path)+"...\r\n";
 	ifstream file_ini_in(file_path);
 	if (!file_ini_in.is_open())
 	{
-		Log += "Error: Error in Open ini file.\n";
+		Log += "Error: Error in Open ini file.\r\n";
 		return false;
 	}
 	string line_data;
@@ -464,7 +464,7 @@ void Projector::ApplyIni(string token, unsigned int*params, int numParams)
 		//	break;
 		//case 5:				//DEFAULT.TRIG_OUT_1.FDELAY
 		//	if (numParams > 1)
-		//		ShowError("Wrong number of parameters in the chosen .ini file for DEFAULT.DISPMODE\n");
+		//		ShowError("Wrong number of parameters in the chosen .ini file for DEFAULT.DISPMODE\r\n");
 		//	ui->spinBox_Trig1OutFDly->setValue(params[0]);
 		//	break;
 		//case 6:				//DEFAULT.TRIG_OUT_2.POL
@@ -551,7 +551,7 @@ void Projector::ApplyIni(string token, unsigned int*params, int numParams)
 	case 20:				//DEFAULT.PATTERNCONFIG.PAT_EXPOSURE
 	{
 		if (numParams > 1)
-			Log += ("Wrong number of parameters in the chosen .ini file for DEFAULT.PATTERNCONFIG.PAT_EXPOSURE");
+			Log += ("Wrong number of parameters in the chosen .ini file for DEFAULT.PATTERNCONFIG.PAT_EXPOSURE.\r\n");
 		ini_exposure = params[0];
 
 		break;
@@ -559,7 +559,7 @@ void Projector::ApplyIni(string token, unsigned int*params, int numParams)
 	case 21:				//DEFAULT.PATTERNCONFIG.PAT_PERIOD
 	{
 		if (numParams > 1)
-			Log += ("Wrong number of parameters in the chosen .ini file for DEFAULT.PATTERNCONFIG.PAT_PERIOD");
+			Log += ("Wrong number of parameters in the chosen .ini file for DEFAULT.PATTERNCONFIG.PAT_PERIOD.\r\n");
 		ini_period = params[0];
 		break;
 
@@ -567,7 +567,7 @@ void Projector::ApplyIni(string token, unsigned int*params, int numParams)
 	case 22:				//DEFAULT.PATTERNCONFIG.PAT_MODE
 	{
 		if (numParams > 1)
-			Log += ("Wrong number of parameters in the chosen .ini file for DEFAULT.PATTERNCONFIG.PAT_MODE.\n");
+			Log += ("Wrong number of parameters in the chosen .ini file for DEFAULT.PATTERNCONFIG.PAT_MODE.\r\n");
 		if (params[0] == 0x3)	//
 		{
 			ini_isFrmFlash = 1;
@@ -577,7 +577,7 @@ void Projector::ApplyIni(string token, unsigned int*params, int numParams)
 			ini_isFrmFlash = 0;
 		}
 		else
-			Log += ("Wrong value as argument for DEFAULT.PATTERNCONFIG.PAT_MODE.\n");
+			Log += ("Wrong value as argument for DEFAULT.PATTERNCONFIG.PAT_MODE.\r\n");
 		break;
 	}
 
@@ -585,7 +585,7 @@ void Projector::ApplyIni(string token, unsigned int*params, int numParams)
 	{
 		ini_isVarExpTrigMode = false;
 		if (numParams > 1 && params[0] <= 4)
-			Log += ("Wrong number of parameters in the chosen .ini file for DEFAULT.PATTERNCONFIG.TRIG_MODE.\n");
+			Log += ("Wrong number of parameters in the chosen .ini file for DEFAULT.PATTERNCONFIG.TRIG_MODE.\r\n");
 
 		if (params[0]) //0 1 2
 			ini_isIntExtTrigMode = true;
@@ -605,7 +605,7 @@ void Projector::ApplyIni(string token, unsigned int*params, int numParams)
 
 	case 24:				//DEFAULT.PATTERNCONFIG.PAT_REPEAT
 		if (numParams > 1)
-			Log +=("Wrong number of parameters in the chosen .ini file for DEFAULT.PATTERNCONFIG.PAT_REPEAT.\n");
+			Log +=("Wrong number of parameters in the chosen .ini file for DEFAULT.PATTERNCONFIG.PAT_REPEAT.\r\n");
 		if (params[0])
 			ini_isRepeat = true;
 		else
@@ -614,24 +614,24 @@ void Projector::ApplyIni(string token, unsigned int*params, int numParams)
 
 	case 25:                //DEFAULT.PATTERNCONFIG.NUM_LUT_ENTRIES
 		if (numParams > 1)
-			Log +=("Wrong number of parameters in the chosen .ini file for DEFAULT.PATTERNCONFIG.NUM_LUT_ENTRIES.\n");
+			Log +=("Wrong number of parameters in the chosen .ini file for DEFAULT.PATTERNCONFIG.NUM_LUT_ENTRIES.\r\n");
 		ini_LutEntriesNum = params[0]+1;
 		break;
 	//wrong 26
 	case 27:                //DEFAULT.PATTERNCONFIG.NUM_SPLASH
 		if (numParams > 1)
 		{
-			Log += ("Wrong number of parameters in the chosen .ini file for DEFAULT.PATTERNCONFIG.NUM_SPLASH.\n");
+			Log += ("Wrong number of parameters in the chosen .ini file for DEFAULT.PATTERNCONFIG.NUM_SPLASH.\r\n");
 		}
 			
 		ini_SwpflashNum = params[0]+1;
 		if (ini_SwpflashNum >= 64)
-			Log += "Warnning: Swap flash number larger than 64, Only write first 64 paras.\n";
+			Log += "Warnning: Swap flash number larger than 64, Only write first 64 paras.\r\n";
 		break;
 
 	case 28:				//DEFAULT.SPLASHLUT
 		if (ini_SwpflashNum != numParams)
-			Log +=("Number of Splash Lut entries not matching with actual Lut size.\n");
+			Log +=("Number of Splash Lut entries not matching with actual Lut size.\r\n");
 		for (int i = 0; i < numParams; i++)
 			ini_SwpflashLut[i] = params[i];
 		break;
@@ -642,7 +642,7 @@ void Projector::ApplyIni(string token, unsigned int*params, int numParams)
 		if (ini_isVarExpTrigMode == false)
 		{
 			if (ini_LutEntriesNum != numParams)
-				Log +=("Number of Splash Lut entries not matching with actual Lut size.\n");
+				Log +=("Number of Splash Lut entries not matching with actual Lut size.\r\n");
 			PatSeqLUT_data.clear();
 
 			unsigned char patNum, bitDepth, trigger_type, maxPatNum, ledSelect;
@@ -657,7 +657,7 @@ void Projector::ApplyIni(string token, unsigned int*params, int numParams)
 
 				if (bitDepth < 1 || bitDepth > 8)
 				{
-					sprintf(dispStr, "Invalid bit-depth in PAT LUT entry%d ", i);
+					sprintf(dispStr, "Invalid bit-depth in PAT LUT entry%d \r\n", i);
 					Log +=(dispStr);
 					continue;
 				}
@@ -671,7 +671,7 @@ void Projector::ApplyIni(string token, unsigned int*params, int numParams)
 					maxPatNum = 24 / bitDepth - 1;
 				if (patNum > maxPatNum)
 				{
-					sprintf(dispStr, "Invalid pattern-number in PAT LUT entry%d ", i);
+					sprintf(dispStr, "Invalid pattern-number in PAT LUT entry%d \r\n", i);
 					Log +=(dispStr);
 					continue;
 				}
@@ -689,7 +689,7 @@ void Projector::ApplyIni(string token, unsigned int*params, int numParams)
 				{
 					if (ini_SwpflashIndex >= ini_SwpflashNum)
 					{
-						Log +=("Bad .ini! SplashLUT entries do not match the number of buffer swaps in PAT LUT");
+						Log +=("Bad .ini! SplashLUT entries do not match the number of buffer swaps in PAT LUT.\r\n");
 						continue;
 					}
 					else
@@ -721,7 +721,7 @@ void Projector::ApplyIni(string token, unsigned int*params, int numParams)
 		}
 		else
 		{
-			Log += "varyExp is Not support yet...";
+			Log += "varyExp is Not support yet...\r\n";
 			break;
 		}
 		/*
@@ -885,14 +885,14 @@ void Projector::ApplyIni(string token, unsigned int*params, int numParams)
 	//		ShowError("Wrong number of parameters in the chosen .ini file for DEFAULT.PORTCONFIG.PIX_FMT");
 	//	if ((params[0] > 0) && ((ui->comboBox_InputSourceList->currentIndex() == 1) || (ui->comboBox_InputSourceList->currentIndex() == 3)))
 	//	{
-	//		ShowError("Wrong pixel format in the .ini file for the chosen port\n");
+	//		ShowError("Wrong pixel format in the .ini file for the chosen port\r\n");
 	//		break;
 	//	}
 	//	if (ui->comboBox_InputSourceList->currentIndex() == 2)
 	//	{
 	//		if ((params[0] == 1) || (params[0] > 2))
 	//		{
-	//			ShowError("Wrong pixel format in the .ini file for the chosen port\n");
+	//			ShowError("Wrong pixel format in the .ini file for the chosen port\r\n");
 	//			break;
 	//		}
 	//		if (params[0] == 2)
@@ -900,7 +900,7 @@ void Projector::ApplyIni(string token, unsigned int*params, int numParams)
 	//	}
 	//	if ((ui->comboBox_InputSourceList->currentIndex() == 0) && (params[0] > 2))
 	//	{
-	//		ShowError("Wrong pixel format in the .ini file for the chosen port\n");
+	//		ShowError("Wrong pixel format in the .ini file for the chosen port\r\n");
 	//		break;
 	//	}
 	//	ui->comboBox_PixelFormatList->setCurrentIndex(params[0]);
@@ -957,7 +957,7 @@ bool Projector::Send_PrtSeqCode()
 {
 	if (ini_isVarExpTrigMode)
 	{
-		Log += "Error: Pattern is VarExpMode, Plase using Send_VarExpPrtSeqCode function.\n";
+		Log += "Error: Pattern is VarExpMode, Plase using Send_VarExpPrtSeqCode function.\r\n";
 		return false;
 	}
 	unsigned int min_pat_exposure[8] = { 235, 700, 1570, 1700, 2000, 2500, 4500, 8333 };//最小曝光时间
@@ -967,12 +967,12 @@ bool Projector::Send_PrtSeqCode()
 	//checking time.
 	if (exposure_time > period_time)
 	{
-		Log += "Error: Pattern exposure setting voilation, it should be, Pattern Exposure = Pattern Period or (Pattern Period - Pattern Exposure) > 230us.\n";
+		Log += "Error: Pattern exposure setting voilation, it should be, Pattern Exposure = Pattern Period or (Pattern Period - Pattern Exposure) > 230us.\r\n";
 		return false;
 	}
 	if (exposure_time != period_time && period_time - exposure_time <= 230)
 	{
-		Log += "Error: Pattern exposure setting voilation, it should be, Pattern Exposure = Pattern Period or (Pattern Period - Pattern Exposure) > 230us.\n";
+		Log += "Error: Pattern exposure setting voilation, it should be, Pattern Exposure = Pattern Period or (Pattern Period - Pattern Exposure) > 230us.\r\n";
 		return false;
 	}
 	DLPC350_ClearPatLut();//ImgLut dont need to clean up
@@ -981,7 +981,7 @@ bool Projector::Send_PrtSeqCode()
 
 	if (PatSeqLUT_data.size() == 0)
 	{
-		Log += "Error: No Pat data aviliable.\n";
+		Log += "Error: No Pat data aviliable.\r\n";
 		return false;
 	}
 
@@ -990,7 +990,7 @@ bool Projector::Send_PrtSeqCode()
 		Pattern pat = PatSeqLUT_data[i];
 		if (i == 0 && pat.triger_type == 3)	//first pat cannot be No trigger
 		{
-			Log += "Error:First Item must be triggered.Please select a Trigger_In_Type other than No Trigger.\n";
+			Log += "Error:First Item must be triggered.Please select a Trigger_In_Type other than No Trigger.\r\n";
 			return false;
 		}
 
@@ -1002,7 +1002,7 @@ bool Projector::Send_PrtSeqCode()
 			{
 				if (exposure_time / num_pats_in_exposure < min_pat_exposure[worstCaseBitDepth])
 				{
-					sprintf(errorStr, "Exposure time %d < Minimum Exposure time %d for bit depth %d.\n", exposure_time / num_pats_in_exposure, min_pat_exposure[worstCaseBitDepth], worstCaseBitDepth + 1);
+					sprintf(errorStr, "Exposure time %d < Minimum Exposure time %d for bit depth %d.\r\n", exposure_time / num_pats_in_exposure, min_pat_exposure[worstCaseBitDepth], worstCaseBitDepth + 1);
 					Log += errorStr;
 					return false;
 				}
@@ -1017,7 +1017,7 @@ bool Projector::Send_PrtSeqCode()
 				{
 					if (exposure_time < min_pat_exposure[worstCaseBitDepth])
 					{
-						sprintf(errorStr, "Exposure time %d < Minimum Exposure time %d for bit depth %d.\n", exposure_time / num_pats_in_exposure, min_pat_exposure[worstCaseBitDepth], worstCaseBitDepth + 1);
+						sprintf(errorStr, "Exposure time %d < Minimum Exposure time %d for bit depth %d.\r\n", exposure_time / num_pats_in_exposure, min_pat_exposure[worstCaseBitDepth], worstCaseBitDepth + 1);
 						Log += errorStr;
 						return false;
 					}
@@ -1043,7 +1043,7 @@ bool Projector::Send_PrtSeqCode()
 		if (DLPC350_AddToPatLut(pat.triger_type, pat.pat_num, pat.bit_depth, pat.color_code,
 			pat.need_inv, pat.need_clear_DMD, pat.buffer_swap, pat.trigOutPrev) < 0)
 		{
-			Log += "Error: Error in Updating LUT";
+			Log += "Error: Error in Updating LUT.\r\n";
 			return false;
 		}
 		//rebuilt PatLut(not necessary)
@@ -1054,7 +1054,7 @@ bool Projector::Send_PrtSeqCode()
 	{
 		if (exposure_time / num_pats_in_exposure < min_pat_exposure[worstCaseBitDepth])
 		{
-			sprintf(errorStr, "Exposure time %d < Minimum Exposure time %d for bit depth %d.\n", exposure_time / num_pats_in_exposure, min_pat_exposure[worstCaseBitDepth], worstCaseBitDepth + 1);
+			sprintf(errorStr, "Exposure time %d < Minimum Exposure time %d for bit depth %d.\r\n", exposure_time / num_pats_in_exposure, min_pat_exposure[worstCaseBitDepth], worstCaseBitDepth + 1);
 			Log += errorStr;
 			return false;
 		}
@@ -1063,7 +1063,7 @@ bool Projector::Send_PrtSeqCode()
 	{
 		if (exposure_time < min_pat_exposure[worstCaseBitDepth])
 		{
-			sprintf(errorStr, "Exposure time %d < Minimum Exposure time %d for bit depth %d.\n", exposure_time / num_pats_in_exposure, min_pat_exposure[worstCaseBitDepth], worstCaseBitDepth + 1);
+			sprintf(errorStr, "Exposure time %d < Minimum Exposure time %d for bit depth %d.\r\n", exposure_time / num_pats_in_exposure, min_pat_exposure[worstCaseBitDepth], worstCaseBitDepth + 1);
 			Log += errorStr;
 			return false;
 		}
@@ -1083,26 +1083,26 @@ bool Projector::Send_PrtSeqCode()
 	//config DLPC pattern basic info
 	if (DLPC350_SetPatternConfig(PatSeqLUT_data.size(), isRepeat, numPatterns, ini_SwpflashNum)<0)
 	{
-		Log += "Error: Error Sending Pattern Config.\n";
+		Log += "Error: Error Sending Pattern Config.\r\n";
 		return false;
 	}
 	//config exposure and period time
 	if (DLPC350_SetExposure_FramePeriod(exposure_time, period_time)<0)
 	{
-		Log += "Error: Error Sending Exposure/Period time.\n";
+		Log += "Error: Error Sending Exposure/Period time.\r\n";
 		return false;
 	}
 	//设定trigmode 一般都是internal 
 	int trigMode = 1;
 	if (DLPC350_SetPatternTriggerMode(trigMode) < 0)
 	{
-		Log += "Error: Error Sending Trigger mode.\n";
+		Log += "Error: Error Sending Trigger mode.\r\n";
 		return false;
 	}
 	//Send PatLUT
 	if (DLPC350_SendPatLut() < 0)
 	{
-		Log += "Error: Error Sending PatLUT.\n";
+		Log += "Error: Error Sending PatLUT.\r\n";
 		return false;
 	}
 	//change the data type to unsigned char*
@@ -1112,7 +1112,7 @@ bool Projector::Send_PrtSeqCode()
 	//Send ImgLUT
 	if (DLPC350_SendImageLut(&splashLut[0], ini_SwpflashNum)==-1)
 	{
-		Log += "Error: Error Sending ImgLut.\n";
+		Log += "Error: Error Sending ImgLut.\r\n";
 		return false;
 	}
 	return true;
@@ -1122,12 +1122,12 @@ bool Projector::Play()
 {
 	if (DLPC350_PatternDisplay(2) >= 0)
 	{
-		Log += "Projector: Playing the pattern...\n";
+		Log += "Projector: Playing the pattern...\r\n";
 		return true;
 	}
 	else
 	{
-		Log += "Error:Playing pattern Error.\n";
+		Log += "Error:Playing pattern Error.\r\n";
 		return false;
 	}
 }
@@ -1143,7 +1143,7 @@ bool Projector::Pause()
 		DLPC350_GetPatternDisplay(&patMode);
 		if (patMode == 1)
 		{
-			Log += "Projector: Pause...\n";
+			Log += "Projector: Pause...\r\n";
 			return true;
 		}
 		else
@@ -1151,7 +1151,7 @@ bool Projector::Pause()
 		this_thread::sleep_for(chrono::microseconds(100));
 		if (i++ > 5)
 		{
-			Log += "Error: Pause no respond.\n";
+			Log += "Error: Pause no respond.\r\n";
 			return false;
 		}
 			
@@ -1176,7 +1176,7 @@ bool Projector::Stop()
 						DLPC350_GetPatternDisplay(&action);
 						if (action == 0)
 						{
-							Log += "Stop playing.\n";
+							Log += "Stop playing.\r\n";
 							return true;
 						}
 						else
@@ -1186,7 +1186,7 @@ bool Projector::Stop()
 						this_thread::sleep_for(chrono::microseconds(100));
 						if (i++ > 5)
 						{
-							Log += "Error: Set DLPC Pattern Display Error(Stop).\n";
+							Log += "Error: Set DLPC Pattern Display Error(Stop).\r\n";
 							return false;
 						}
 
@@ -1199,20 +1199,20 @@ bool Projector::Stop()
 			}
 			else
 			{
-				Log += "Error: Get Pattern Display Status Error.\n";
+				Log += "Error: Get Pattern Display Status Error.\r\n";
 				return false;
 			}
 
 		}
 		else
 		{
-			Log += "Warnning: Projector not in Parttern Sequence Mode.\n";
+			Log += "Warnning: Projector not in Parttern Sequence Mode.\r\n";
 			return false;
 		}
 	}
 	else
 	{
-		Log += "Error:Can not stop because of can not get the Mode of proj.\n";
+		Log += "Error:Can not stop because of can not get the Mode of proj.\r\n";
 		return false;
 	}
 }
@@ -1221,7 +1221,7 @@ bool Projector::ValidatePatSeq()
 {
 	if (!SLmode)
 	{
-		Log += "Please change operating mode to Pattern Sequence before validating sequence.\n";
+		Log += "Please change operating mode to Pattern Sequence before validating sequence.\r\n";
 		return false;
 	}
 	
@@ -1229,7 +1229,7 @@ bool Projector::ValidatePatSeq()
 
 	if (DLPC350_StartPatLutValidate())
 	{
-		Log += "Error: Error validating Lut data.\n";
+		Log += "Error: Error validating Lut data.\r\n";
 		return false;
 	}
 	unsigned int status;
@@ -1240,7 +1240,7 @@ bool Projector::ValidatePatSeq()
 	{
 		if (DLPC350_CheckPatLutValidate(&ready, &status) < 0)
 		{
-			Log+= "Error: Error validating LUT data.\n";
+			Log+= "Error: Error validating LUT data.\r\n";
 			return false;
 		}
 
@@ -1255,7 +1255,7 @@ bool Projector::ValidatePatSeq()
 
 		if (i++ > 5)
 		{
-			Log += "Error: Validating LUT data no respond.\n";
+			Log += "Error: Validating LUT data no respond.\r\n";
 			return false;
 		}
 	}
@@ -1266,12 +1266,12 @@ bool Projector::ValidatePatSeq()
 	 PatPeriodShort = (status&BIT4) == BIT4;
 	 if (!(status & BIT0) && !(status & BIT1))
 	 {
-		 Log += "Pattern Sequence pass the validation.\n";
+		 Log += "Pattern Sequence pass the validation.\r\n";
 		 return true;
 	 }
 	 else
 	 {
-		 Log += "Error: Pattern Sequence not pass the validation.\n";
+		 Log += "Error: Pattern Sequence not pass the validation.\r\n";
 		 return false;
 	 }
 		 

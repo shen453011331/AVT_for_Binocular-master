@@ -4,7 +4,7 @@
 #include "opencv2\opencv.hpp"
 #include <string>
 #include <deque>
-
+#include <afxmt.h>
 using namespace cv;
 using namespace std;
 
@@ -22,6 +22,8 @@ enum AttrType
 
 class Camera
 {
+private:
+
 //其所有信息都是开放的
 public:
 	//相机固定参数 
@@ -32,9 +34,12 @@ public:
 	tPvUint32 BytesPerFrame; //单帧字节数			获得
 	std::string CameraName;	//相机名称				输入
 	tPvUint32 MaxSize;		//相机数据包大小        获得  当相机能采集到图像 但是都是黑的时候 可以看这个
-
 	tPvFrame* pFrames;		//相机帧数据
 
+	cv::Mat* buffer;		//图像buffer
+	cv::Mat show_buffer;	//图像buffer用于展示
+	int buffer_size;
+	bool is_reapeat = false;		//是否重复测量
 	//状态变量
 	tPvUint32 Expose;		//相机曝光值			获得
 	int FrameRate;			//采集帧率				输入/初始化为30
@@ -61,21 +66,23 @@ public:
 	bool ChangeTrigerMode(int TrrigerMode);			//改变触发模式
 	bool ChangeExposeValue(unsigned long evalue);	//改变曝光值
 
-
+	void GetImage(cv::Mat& data);
 
 
 	//多线程信号量
 	HANDLE sequenceVacant, sequenceBusy;		//用于进行相机回调和压入队列的线程间处理控制
 	HANDLE swap, swapOver;						//用于堆栈交换的控制量
 	HANDLE NextProcess[THREADNUM];				//表示是否通知下个线程进行
-
+	
+	//线程互斥量
+	CRITICAL_SECTION show_read;
 	int seqThreadState, proThreadState[THREADNUM];	//两类线程的控制量，用于结束while语句，实现线程停止。
 	int acqThreadState;
 	BYTE* Seq_Buffer;							//用于存入堆栈的图像buffer指针
 	deque<Mat> frameSequ, processSequ;			//用于进行堆栈和处理的图像队列
 	void InitThreads();		//初始化所有线程
 	void CloseThreads();	//关闭所有线程
-
+	
 	//存图的位置
 	CString filepath;
 };
@@ -91,4 +98,5 @@ void __stdcall FrameDoneCB(tPvFrame* pFrame);
 
 DWORD WINAPI SeqThread(LPVOID param);
 DWORD WINAPI ProThread(LPVOID param);
+
 int getImage(Camera* this_cam, Mat & image, int thread);

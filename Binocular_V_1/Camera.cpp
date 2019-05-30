@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "Camera.h"
 #include <string>
-#include <thread>
 
 
 using namespace std;
@@ -105,6 +104,7 @@ bool Camera::AttrSet(AttrType attrtype, const char* name, const char* value)
 			outLog = "Warnning: Arrtibute of Camera Setting failed in Camera of value " + string(name) + " in camera " + CameraName;
 		}
 	}
+	return true;
 }
 
 bool Camera::AttrGet(AttrType attrtype, const char* name, char* value_s)
@@ -213,7 +213,7 @@ bool Camera::Open()
 	ErrCode |= PvAttrUint32Get(H_Camera, "Height", &Height);
 	ErrCode |= PvAttrUint32Get(H_Camera, "PacketSize", &MaxSize);
 	ErrCode |= PvAttrUint32Get(H_Camera, "ExposureValue", &Expose);
-
+	show_buffer.create(Height, Width, CV_8UC1);
 	//设置属性
 	ErrCode |= PvAttrEnumSet(H_Camera, "ExposureMode", "Manual");				//设定手动曝光模式
 	ErrCode |= PvAttrEnumSet(H_Camera, "PixelFormat", "Mono8");					//像素格式为Mono8
@@ -369,6 +369,7 @@ bool Camera::StartCapture()
 			InitThreads();
 			//已知相机的规格和图像大小 首先建立一个Seq_buffer的大小，以后这个buffer就固定了
 			Seq_Buffer = new unsigned char[Width*Height];
+			InitializeCriticalSection(&show_read);
 			//建立两组线程 一个是单线程 用于拷贝
 			DWORD id;
 			CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)SeqThread, this, 0, &id);
@@ -379,7 +380,7 @@ bool Camera::StartCapture()
 				t_info[tNum].num = tNum;
 				t_info[tNum].ptr = this;
 				CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)ProThread, &t_info[tNum], 0, &id);
-				Sleep(10);		
+				Sleep(3);		
 			}
 			//以上内容可以放在一个threadInit()函数里
 			//发送相机命令
@@ -464,6 +465,7 @@ bool Camera::CloseCapture()
 			pFrames = NULL;
 		}
 
+		DeleteCriticalSection(&show_read);
 		//确定返回值
 		if (Err == ePvErrSuccess)
 		{
@@ -537,6 +539,13 @@ bool Camera::ChangeExposeValue(unsigned long evalue)
 	}
 }
 
+void Camera::GetImage(cv::Mat & data)	//这个一定注意，用于获取当前帧的图像并输出，仅用来显示，不保证帧率的性质（因为显示图像也需要时间）
+{
+	EnterCriticalSection(&show_read);
+	data = show_buffer.clone();
+	LeaveCriticalSection(&show_read);
+}
+
 void Camera::InitThreads()
 {
 	//开启处理和队列flag,开启后开启它 关闭先关闭它
@@ -599,8 +608,6 @@ void __stdcall FrameDoneCB(tPvFrame * pFrame)
 DWORD WINAPI SeqThread(LPVOID param)
 {
 	Camera* this_cam = (Camera*)param;
-	Mat SaveImage;
-	SaveImage.create(this_cam->Height, this_cam->Width, CV_8UC1);
 	
 	while (this_cam->seqThreadState > 0)
 	{
@@ -608,8 +615,10 @@ DWORD WINAPI SeqThread(LPVOID param)
 		if (WaitForSingleObject(this_cam->sequenceBusy, 100) == WAIT_OBJECT_0)
 		{
 			ResetEvent(this_cam->sequenceBusy);														//一旦执行，重置信号
-			memcpy(SaveImage.data, this_cam->Seq_Buffer, (this_cam->Width)*(this_cam->Height));
-			this_cam->frameSequ.push_back(SaveImage);												//将mat类存入一个mat的deque变量中，用于后面存，前面取
+			EnterCriticalSection(&this_cam->show_read);
+			memcpy(this_cam->show_buffer.data, this_cam->Seq_Buffer, (this_cam->Width)*(this_cam->Height));
+			LeaveCriticalSection(&this_cam->show_read);
+			this_cam->frameSequ.push_back(this_cam->show_buffer);												//将mat类存入一个mat的deque变量中，用于后面存，前面取
 			//当swap有效的时候，调用swap方法将数据转给processSequ
 			if (WaitForSingleObject(this_cam->swap, 0) == WAIT_OBJECT_0)							//这个就是判断当前processSequ是否为空的信号量
 			{
@@ -623,7 +632,7 @@ DWORD WINAPI SeqThread(LPVOID param)
 	return 0;
 }
 
-//多线程处理函数 循环多线程对数据进行处理
+//多线程处理函数 循环多线程对数据进行处理//尽量保证 图像采集的数量是大于等于5的（因为开启了五个线程，防止互相之间访问冲突）
 DWORD WINAPI ProThread(LPVOID param)
 {
 	syInfo* t_info1 = (syInfo*)param;			//用于进行线程传入量
@@ -634,7 +643,7 @@ DWORD WINAPI ProThread(LPVOID param)
 		nextThreadNum = 0;
 	else
 		nextThreadNum = threadNum + 1;
-	Mat image;									//这个是用来保存获取进入当前线程图像的临时文件
+
 	int saving_circle = 0;
 	int frame_circle = 0;
 	while (this_cam->proThreadState[threadNum] > 0)
@@ -646,7 +655,9 @@ DWORD WINAPI ProThread(LPVOID param)
 			//用来接收上一个线程的信号，即上一个线程通知下一个线程可以开始对队列中图像进行预处理
 		{
 			ResetEvent(this_cam->NextProcess[threadNum]);				//重置本线程信号量
-			b_err = getImage(this_cam, image, threadNum);//调用获取图像的函数 并且设置下一个线程信号量
+			//b_err = getImage(this_cam, image, threadNum);//调用获取图像的函数 并且设置下一个线程信号量
+			b_err = getImage(this_cam, this_cam->buffer[(FrameNum%this_cam->buffer_size) - 1], threadNum);	//直接往我们的buffer里存图
+
 			//这里是并行存储
 			if (b_err == -1)		//如果线程要停止了，那就彻底停止该线程并退出(break)
 			{
@@ -660,15 +671,17 @@ DWORD WINAPI ProThread(LPVOID param)
 			}
 				
 			else if (b_err == 1)	//一旦之前成功拿到数据
-			{				
+			{	
+				//一旦获取足够数量的图像 就停下拍摄 
+				
 				SetEvent(this_cam->NextProcess[nextThreadNum]);				//获得图像成功，让位置给下一个线程
-				//多线程并行进行图像预处理
+				//多线程并行进行图像存储
 				if (this_cam->isSaving)
 				{
 					char filename[50];
 					sprintf(filename, "Frame%05d_%05d.bmp", SavingNum,FrameNum);	//第一个为存图的数量	第二个为获取图的数量
 					string filename_all = this_cam->filepath + "\\" + this_cam->CameraName + "\\" + filename;
-					imwrite(filename_all, image);
+					imwrite(filename_all, this_cam->buffer[(FrameNum%this_cam->buffer_size) - 1]);
 					saving_circle++;
 				}
 				frame_circle++;
@@ -723,3 +736,4 @@ int getImage(Camera* this_cam, Mat & image, int threadNum)
 		}
 	}
 }
+

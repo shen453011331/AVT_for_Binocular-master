@@ -85,6 +85,15 @@ void CBinocularDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_MFCEDITBROWSE2, _ini_path);
 	DDX_Control(pDX, IDC_BTN_CONNECTPROJ, _btn_connectproj);
 	DDX_Control(pDX, IDC_BTN_CLOSEPROJ, _btn_closeproj);
+	DDX_Control(pDX, IDC_EDT_EXPOSEURPROJ, _edt_proj_exp);
+	DDX_Control(pDX, IDC_EDT_PERIODPROJ, _edt_proj_prd);
+	DDX_Control(pDX, IDC_EDT_CYCLE1, _cycle_1);
+	DDX_Control(pDX, IDC_EDT_CYCLE2, _cycle_2);
+	DDX_Control(pDX, IDC_EDT_CYCLE3, _cycle_3);
+	DDX_Control(pDX, IDC_EDT_STEP1, _step_1);
+	DDX_Control(pDX, IDC_EDT_STEP2, _step_2);
+	DDX_Control(pDX, IDC_EDT_STEP3, _step_3);
+	DDX_Control(pDX, IDC_CHECK1, _is_repeat);
 }
 
 BEGIN_MESSAGE_MAP(CBinocularDlg, CDialogEx)
@@ -105,6 +114,17 @@ BEGIN_MESSAGE_MAP(CBinocularDlg, CDialogEx)
 	ON_EN_CHANGE(IDC_MFCEDITBROWSE1, &CBinocularDlg::OnEnChangeMfceditbrowse1)
 	ON_BN_CLICKED(IDC_BTN_STARTEXP, &CBinocularDlg::OnBnClickedBtnStartexp)
 	ON_EN_CHANGE(IDC_MFCEDITBROWSE2, &CBinocularDlg::OnEnChangeMfceditbrowse2)
+	ON_BN_CLICKED(IDC_BTN_CLOSEPROJ, &CBinocularDlg::OnBnClickedBtnCloseproj)
+	ON_BN_CLICKED(IDC_BTN_CONNECTPROJ, &CBinocularDlg::OnBnClickedBtnConnectproj)
+	ON_EN_CHANGE(IDC_EDT_EXPOSEURPROJ, &CBinocularDlg::OnEnChangeEdtExposeurproj)
+	ON_EN_CHANGE(IDC_EDT_PERIODPROJ, &CBinocularDlg::OnEnChangeEdtPeriodproj)
+	ON_EN_CHANGE(IDC_EDT_CYCLE1, &CBinocularDlg::OnEnChangeEdtCycle1)
+	ON_EN_CHANGE(IDC_EDT_CYCLE2, &CBinocularDlg::OnEnChangeEdtCycle2)
+	ON_EN_CHANGE(IDC_EDT_CYCLE3, &CBinocularDlg::OnEnChangeEdtCycle3)
+	ON_EN_CHANGE(IDC_EDT_STEP1, &CBinocularDlg::OnEnChangeEdtStep1)
+	ON_EN_CHANGE(IDC_EDT_STEP2, &CBinocularDlg::OnEnChangeEdtStep2)
+	ON_EN_CHANGE(IDC_EDT_STEP3, &CBinocularDlg::OnEnChangeEdtStep3)
+	ON_BN_CLICKED(IDC_CHECK1, &CBinocularDlg::OnBnClickedCheck1)
 END_MESSAGE_MAP()
 
 
@@ -150,6 +170,16 @@ BOOL CBinocularDlg::OnInitDialog()
 	_left_ip = ntohl(inet_addr("192.168.1.3"));		//IP地址转换 将四个点分十进制转成2进制数 用于显示用于开启相机
 	_right_ip = ntohl(inet_addr("192.168.1.2"));
 	_setted_exp_val.Format(_T("%d"),5000);
+	
+	strtgy.col_cycles = { 70,72,84 };
+	strtgy.col_steps = { 3,3,3 };
+
+	_cycle_1.SetWindowText(_T("70"));
+	_cycle_2.SetWindowText(_T("72"));
+	_cycle_3.SetWindowText(_T("84"));
+	_step_1.SetWindowText(_T("3"));
+	_step_2.SetWindowText(_T("3"));
+	_step_3.SetWindowText(_T("3"));
 	UpdateData(FALSE);
 
 	//开启关键区域
@@ -561,6 +591,13 @@ void CBinocularDlg::OnTimer(UINT_PTR uId)
 			if (old_state != new_state)
 				append_log(projector->getLog());
 			update_projector_status();
+			_btn_closeproj.EnableWindow(true);
+			_btn_connectproj.EnableWindow(false);
+		}
+		else
+		{
+			_btn_closeproj.EnableWindow(false);
+			_btn_connectproj.EnableWindow(true);
 		}
 	}
 	/*
@@ -571,27 +608,56 @@ void CBinocularDlg::OnTimer(UINT_PTR uId)
 	}
 }
 
-
 //开始采集图像 调用完成后 相机处在拍摄状态 投影仪初始化完成 并等待play
 void CBinocularDlg::OnBnClickedBtnStartacq()
 {
 	// TODO: 在此添加控件通知处理程序代码
+	if (projector->exposure_time < 230 || projector->period_time < 230 || projector->ini_file_path == "")
+	{
+		append_log(string("Error: Projector do not have enough paras.(exp/prd time, ini file path)"));
+		return;
+	}
 	if (projector->Projector_Init() == false)
 	{
 		append_log(projector->getLog());
 		return;
 	}
 	append_log(projector->getLog());
+	
+	int size = strtgy.col_steps[0] + strtgy.col_steps[1] + strtgy.col_steps[2];
+
+	if (size != projector->ini_LutEntriesNum)
+	{
+		append_log(string("Projector pattern number not match this setting."));
+		return;
+	}
 	//为相机创建一个自己的线程
 	if (left_Camera)
 	{
 		if (left_Camera->isStreaming == false)
+		{
+			if (buffer_left != NULL)
+				delete[] buffer_left;
+			buffer_left = NULL;
+			buffer_left = new cv::Mat[size];
+			left_Camera->buffer = buffer_left;
+			left_Camera->buffer_size = size;
 			left_thread = AfxBeginThread(Left_ThreadCapture, this);
+		}
+			
 	}
 	if (right_Camera)
 	{
 		if (right_Camera->isStreaming == false)
+		{
+			if (buffer_right != NULL)
+				delete[] buffer_right;
+			buffer_right = NULL;
+			buffer_right = new cv::Mat[size];
+			right_Camera->buffer = buffer_right;
+			right_Camera->buffer_size = size;
 			right_thread = AfxBeginThread(Right_ThreadCapture, this);
+		}
 	}
 }
 //停止采集图像
@@ -613,6 +679,10 @@ void CBinocularDlg::OnBnClickedBtnStopacq()
 		{
 			left_Camera->CloseCapture();
 			append_log(left_Camera->outLog);
+			delete[] buffer_left;
+			right_Camera->buffer = NULL;
+			left_Camera->buffer_size = 0;
+			buffer_left = NULL;
 		}
 	}
 	if (right_Camera)
@@ -621,6 +691,10 @@ void CBinocularDlg::OnBnClickedBtnStopacq()
 		{
 			right_Camera->CloseCapture();
 			append_log(right_Camera->outLog);
+			delete[] buffer_right;
+			right_Camera->buffer = NULL;
+			right_Camera->buffer_size = 0;
+			buffer_right = NULL;
 		}
 	}
 }
@@ -724,7 +798,6 @@ void CBinocularDlg::OnEnChangeMfceditbrowse1()
 	}
 }
 
-
 //开始曝光拍摄
 //注意，之前开始相机的时候，处于外触发等待的状态，这个函数之后，开始进行真正的采图
 //一共触发几次，拍摄多少张图，每张图代表是第几个相位的第几张，都是一个结构体定的。
@@ -733,7 +806,6 @@ void CBinocularDlg::OnBnClickedBtnStartexp()
 	// TODO: 在此添加控件通知处理程序代码
 	projector->Play();
 }
-
 
 void CBinocularDlg::OnEnChangeMfceditbrowse2()
 {
@@ -748,3 +820,136 @@ void CBinocularDlg::OnEnChangeMfceditbrowse2()
 	projector->ini_file_path = _ini_cstring.GetBuffer(0);
 }
 
+void CBinocularDlg::OnBnClickedBtnCloseproj()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	delete projector;
+	projector = NULL;
+}
+
+void CBinocularDlg::OnBnClickedBtnConnectproj()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	projector = new Projector();
+}
+
+/*投影仪曝光时间*/
+void CBinocularDlg::OnEnChangeEdtExposeurproj()
+{
+	// TODO:  如果该控件是 RICHEDIT 控件，它将不
+	// 发送此通知，除非重写 CDialogEx::OnInitDialog()
+	// 函数并调用 CRichEditCtrl().SetEventMask()，
+	// 同时将 ENM_CHANGE 标志“或”运算到掩码中。
+
+	// TODO:  在此添加控件通知处理程序代码
+	CString cstr_exposure_time;
+	_edt_proj_exp.GetWindowText(cstr_exposure_time);
+	projector->exposure_time = _ttoi(cstr_exposure_time);
+}
+
+void CBinocularDlg::OnEnChangeEdtPeriodproj()
+{
+	// TODO:  如果该控件是 RICHEDIT 控件，它将不
+	// 发送此通知，除非重写 CDialogEx::OnInitDialog()
+	// 函数并调用 CRichEditCtrl().SetEventMask()，
+	// 同时将 ENM_CHANGE 标志“或”运算到掩码中。
+
+	// TODO:  在此添加控件通知处理程序代码
+	CString cstr_proid_time;
+	_edt_proj_prd.GetWindowText(cstr_proid_time);
+	projector->period_time = _ttoi(cstr_proid_time);
+}
+
+
+/*条纹周期性和步长性设置*/
+void CBinocularDlg::OnEnChangeEdtCycle1()
+{
+	// TODO:  如果该控件是 RICHEDIT 控件，它将不
+	// 发送此通知，除非重写 CDialogEx::OnInitDialog()
+	// 函数并调用 CRichEditCtrl().SetEventMask()，
+	// 同时将 ENM_CHANGE 标志“或”运算到掩码中。
+
+	// TODO:  在此添加控件通知处理程序代码
+	CString cstr_cycle;
+	_cycle_1.GetWindowText(cstr_cycle);
+	strtgy.col_cycles[0] = _ttoi(cstr_cycle);
+}
+
+void CBinocularDlg::OnEnChangeEdtCycle2()
+{
+	// TODO:  如果该控件是 RICHEDIT 控件，它将不
+	// 发送此通知，除非重写 CDialogEx::OnInitDialog()
+	// 函数并调用 CRichEditCtrl().SetEventMask()，
+	// 同时将 ENM_CHANGE 标志“或”运算到掩码中。
+
+	// TODO:  在此添加控件通知处理程序代码
+	CString cstr_cycle;
+	_cycle_2.GetWindowText(cstr_cycle);
+	strtgy.col_cycles[1] = _ttoi(cstr_cycle);
+}
+
+void CBinocularDlg::OnEnChangeEdtCycle3()
+{
+	// TODO:  如果该控件是 RICHEDIT 控件，它将不
+	// 发送此通知，除非重写 CDialogEx::OnInitDialog()
+	// 函数并调用 CRichEditCtrl().SetEventMask()，
+	// 同时将 ENM_CHANGE 标志“或”运算到掩码中。
+
+	// TODO:  在此添加控件通知处理程序代码
+	CString cstr_cycle;
+	_cycle_3.GetWindowText(cstr_cycle);
+	strtgy.col_cycles[2] = _ttoi(cstr_cycle);
+}
+
+void CBinocularDlg::OnEnChangeEdtStep1()
+{
+	// TODO:  如果该控件是 RICHEDIT 控件，它将不
+	// 发送此通知，除非重写 CDialogEx::OnInitDialog()
+	// 函数并调用 CRichEditCtrl().SetEventMask()，
+	// 同时将 ENM_CHANGE 标志“或”运算到掩码中。
+
+	// TODO:  在此添加控件通知处理程序代码
+	CString cstr_step;
+	_step_1.GetWindowText(cstr_step);
+	strtgy.col_steps[0] = _ttoi(cstr_step);
+}
+
+void CBinocularDlg::OnEnChangeEdtStep2()
+{
+	// TODO:  如果该控件是 RICHEDIT 控件，它将不
+	// 发送此通知，除非重写 CDialogEx::OnInitDialog()
+	// 函数并调用 CRichEditCtrl().SetEventMask()，
+	// 同时将 ENM_CHANGE 标志“或”运算到掩码中。
+
+	// TODO:  在此添加控件通知处理程序代码
+	CString cstr_step;
+	_step_2.GetWindowText(cstr_step);
+	strtgy.col_steps[1] = _ttoi(cstr_step);
+}
+
+void CBinocularDlg::OnEnChangeEdtStep3()
+{
+	// TODO:  如果该控件是 RICHEDIT 控件，它将不
+	// 发送此通知，除非重写 CDialogEx::OnInitDialog()
+	// 函数并调用 CRichEditCtrl().SetEventMask()，
+	// 同时将 ENM_CHANGE 标志“或”运算到掩码中。
+
+	// TODO:  在此添加控件通知处理程序代码
+	CString cstr_step;
+	_step_3.GetWindowText(cstr_step);
+	strtgy.col_steps[2] = _ttoi(cstr_step);
+}
+
+
+void CBinocularDlg::OnBnClickedCheck1()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	if (left_Camera)
+	{
+		left_Camera->is_reapeat = _is_repeat.GetCheck();
+	}
+	if (right_Camera)
+	{
+		right_Camera->is_reapeat = _is_repeat.GetCheck();
+	}
+}

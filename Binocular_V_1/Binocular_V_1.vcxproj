@@ -21,7 +21,7 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{C7F5E97E-35EE-482B-A97F-4CDB76B1497E}</ProjectGuid>
     <RootNamespace>Binocular_V_1</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.14393.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
     <Keyword>MFCProj</Keyword>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -117,7 +117,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>_WINDOWS;_DEBUG;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_WINDOWS;_DEBUG;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_SCL_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
     </ClCompile>
     <Link>
@@ -197,6 +197,7 @@
   <ItemGroup>
     <ClInclude Include="BinocularDlg.h" />
     <ClInclude Include="Binocular_V_1.h" />
+    <ClInclude Include="calculate_3D.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="dlpc350\dlpc350_api.h" />
     <ClInclude Include="dlpc350\dlpc350_BMPParser.h" />
@@ -215,6 +216,10 @@
   <ItemGroup>
     <ClCompile Include="BinocularDlg.cpp" />
     <ClCompile Include="Binocular_V_1.cpp" />
+    <ClCompile Include="calculate_3D.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="dlpc350\dlpc350_api.cpp">
       <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">dlpcafx.h</PrecompiledHeaderFile>

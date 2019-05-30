@@ -42,7 +42,7 @@ private:
 	bool ini_isVarExpTrigMode = false;		//是否为变曝光模式 否为不变曝光模式
 	bool ini_isIntExtTrigMode = false;		//是否是内外部触发 否为VSYNC触发
 	bool ini_isRepeat = false;				//是否是重复的
-	unsigned int ini_LutEntriesNum = 0;		//由多少图案构成 	
+	
 	unsigned int ini_SwpflashNum = 0;			//需要交换多少次flash img				//not only read from ini but also send to DLPC
 	unsigned int ini_SwpflashLut[64] = { 0 };	//每一次交换flash的时候，转换的Index	//not only read from ini but also send to DLPC
 	unsigned int ini_exposure = 0;			//exposure time								
@@ -74,6 +74,7 @@ public:
 	
 	//validate state
 	bool ExpOOR, PatNumOOR, TrigOutOverLap, BlkVecMiss, PatPeriodShort;
+	unsigned int ini_LutEntriesNum = 0;		//由多少图案构成 
 public:
 	Projector();	//构造函数	对象内部参量初始化 
 	~Projector();	//析构函数

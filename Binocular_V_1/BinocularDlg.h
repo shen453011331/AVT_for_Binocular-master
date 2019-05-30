@@ -4,10 +4,10 @@
 
 #pragma once
 #include "afxwin.h"
-//自定义的 相机类
+
 #include "Camera.h"
-//自定义的 投影仪类
 #include "Projector.h"
+#include "calculate_3D.h"
 
 #include <string>
 #include "afxeditbrowsectrl.h"
@@ -39,6 +39,10 @@ public:
 	unsigned long frmcnt_buffer_l;
 	unsigned long frmcnt_buffer_r;
 
+	cv::Mat* buffer_left;
+	cv::Mat* buffer_right;
+	
+	Proj_Strategy strtgy;
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 支持
 
@@ -76,6 +80,16 @@ public:
 	CButton _btn_connectproj;
 	CButton _btn_closeproj;
 
+	CEdit _edt_proj_exp;
+	CEdit _edt_proj_prd;
+
+	CEdit _cycle_1;
+	CEdit _cycle_2;
+	CEdit _cycle_3;
+	CEdit _step_1;
+	CEdit _step_2;
+	CEdit _step_3;
+
 	afx_msg void OnSelchangeCmbTrigger();
 	afx_msg void OnBnClickedBtnopenleft();
 	afx_msg void OnBnClickedBtncloseleft();
@@ -89,12 +103,24 @@ public:
 	afx_msg void OnEnChangeMfceditbrowse1();
 	afx_msg void OnBnClickedBtnStartexp();
 	afx_msg void OnEnChangeMfceditbrowse2();
+	afx_msg void OnBnClickedBtnCloseproj();
+	afx_msg void OnBnClickedBtnConnectproj();
+	afx_msg void OnEnChangeEdtExposeurproj();
+	afx_msg void OnEnChangeEdtPeriodproj();
+	afx_msg void OnEnChangeEdtCycle1();
+	afx_msg void OnEnChangeEdtCycle2();
+	afx_msg void OnEnChangeEdtCycle3();
+	afx_msg void OnEnChangeEdtStep1();
+	afx_msg void OnEnChangeEdtStep2();
+	afx_msg void OnEnChangeEdtStep3();
 
 	CRITICAL_SECTION Log_Protection;		//日志单线程操作需要的保护
 
 	//各种有用的函数 今后可以添加在这里
 	void append_log(std::string& log_data);		//对Log进行添加
 	void update_projector_status();				//更新投影仪的状态信息
+	afx_msg void OnBnClickedCheck1();
+	CButton _is_repeat;
 };
 
 //单相机 单线程采集函数

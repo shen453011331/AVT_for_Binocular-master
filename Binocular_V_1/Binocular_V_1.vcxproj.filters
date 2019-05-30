@@ -75,6 +75,9 @@
     <ClInclude Include="dlpc350\dlpc350_version.h">
       <Filter>dlpc350\head</Filter>
     </ClInclude>
+    <ClInclude Include="calculate_3D.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Binocular_V_1.cpp">
@@ -106,6 +109,9 @@
     </ClCompile>
     <ClCompile Include="dlpc350\dlpc350_usb.cpp">
       <Filter>dlpc350\source</Filter>
+    </ClCompile>
+    <ClCompile Include="calculate_3D.cpp">
+      <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
