@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "Camera.h"
 #include <string>
-
+#include "Projector.h"
 
 using namespace std;
 //标准的空白构造函数
@@ -656,7 +656,7 @@ DWORD WINAPI ProThread(LPVOID param)
 		{
 			ResetEvent(this_cam->NextProcess[threadNum]);				//重置本线程信号量
 			//b_err = getImage(this_cam, image, threadNum);//调用获取图像的函数 并且设置下一个线程信号量
-			b_err = getImage(this_cam, this_cam->buffer[(FrameNum%this_cam->buffer_size) - 1], threadNum);	//直接往我们的buffer里存图
+			b_err = getImage(this_cam, this_cam->buffer[((FrameNum-1)%this_cam->buffer_size)], threadNum);	//直接往我们的buffer里存图
 
 			//这里是并行存储
 			if (b_err == -1)		//如果线程要停止了，那就彻底停止该线程并退出(break)
@@ -673,7 +673,12 @@ DWORD WINAPI ProThread(LPVOID param)
 			else if (b_err == 1)	//一旦之前成功拿到数据
 			{	
 				//一旦获取足够数量的图像 就停下拍摄 
-				
+				EnterCriticalSection(this_cam->proj_protect);
+				if (this_cam->is_reapeat == false && FrameNum == 9)
+				{
+					this_cam->proj->Stop();
+				}
+				LeaveCriticalSection(this_cam->proj_protect);
 				SetEvent(this_cam->NextProcess[nextThreadNum]);				//获得图像成功，让位置给下一个线程
 				//多线程并行进行图像存储
 				if (this_cam->isSaving)
@@ -681,7 +686,7 @@ DWORD WINAPI ProThread(LPVOID param)
 					char filename[50];
 					sprintf(filename, "Frame%05d_%05d.bmp", SavingNum,FrameNum);	//第一个为存图的数量	第二个为获取图的数量
 					string filename_all = this_cam->filepath + "\\" + this_cam->CameraName + "\\" + filename;
-					imwrite(filename_all, this_cam->buffer[(FrameNum%this_cam->buffer_size) - 1]);
+					imwrite(filename_all, this_cam->buffer[((FrameNum-1)%this_cam->buffer_size)]);
 					saving_circle++;
 				}
 				frame_circle++;

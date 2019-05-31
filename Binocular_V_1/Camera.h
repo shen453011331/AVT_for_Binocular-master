@@ -5,6 +5,7 @@
 #include <string>
 #include <deque>
 #include <afxmt.h>
+#include "Projector.h"
 using namespace cv;
 using namespace std;
 
@@ -38,6 +39,7 @@ public:
 
 	cv::Mat* buffer;		//图像buffer
 	cv::Mat show_buffer;	//图像buffer用于展示
+	Projector* proj = NULL;	//用于完成数据交互信息
 	int buffer_size;
 	bool is_reapeat = false;		//是否重复测量
 	//状态变量
@@ -57,7 +59,7 @@ public:
 	Camera(tPvUint32 ip_addr, std::string cam_name);	//用网口地址创建一个相机，并设定默认的参数
 
 	//基本的方法
-	bool AttrSet(AttrType attrtype, const char* name, const char* value);			//单独设定各种参数 从value中获取 bool时输入0 1
+	bool AttrSet(AttrType attrtype, const char* name, const char* value);	//单独设定各种参数 从value中获取 bool时输入0 1
 	bool AttrGet(AttrType attrtype, const char* name, char* value);			//单独获取各种参数 存在value中 bool存入0 1
 	bool Open();			//打开相机
 	bool Close();			//关闭相机
@@ -76,6 +78,7 @@ public:
 	
 	//线程互斥量
 	CRITICAL_SECTION show_read;
+	CRITICAL_SECTION* proj_protect;
 	int seqThreadState, proThreadState[THREADNUM];	//两类线程的控制量，用于结束while语句，实现线程停止。
 	int acqThreadState;
 	BYTE* Seq_Buffer;							//用于存入堆栈的图像buffer指针

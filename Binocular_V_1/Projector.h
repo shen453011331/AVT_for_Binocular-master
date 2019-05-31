@@ -38,18 +38,18 @@ private:
 	std::vector<std::string> token_list;
 	
 	//ini文件信息
-	bool ini_isFrmFlash = false;			//是否从Flash中加载
-	bool ini_isVarExpTrigMode = false;		//是否为变曝光模式 否为不变曝光模式
-	bool ini_isIntExtTrigMode = false;		//是否是内外部触发 否为VSYNC触发
-	bool ini_isRepeat = false;				//是否是重复的
+	bool ini_isFrmFlash;			//是否从Flash中加载
+	bool ini_isVarExpTrigMode;		//是否为变曝光模式 否为不变曝光模式
+	bool ini_isIntExtTrigMode;		//是否是内外部触发 否为VSYNC触发
+	bool ini_isRepeat;				//是否是重复的
 	
-	unsigned int ini_SwpflashNum = 0;			//需要交换多少次flash img				//not only read from ini but also send to DLPC
-	unsigned int ini_SwpflashLut[64] = { 0 };	//每一次交换flash的时候，转换的Index	//not only read from ini but also send to DLPC
-	unsigned int ini_exposure = 0;			//exposure time								
-	unsigned int ini_period = 0;			//preiod cycle time							
+	unsigned int ini_SwpflashNum;			//需要交换多少次flash img				//not only read from ini but also send to DLPC
+	unsigned int ini_SwpflashLut[64];		//每一次交换flash的时候，转换的Index	//not only read from ini but also send to DLPC
+	unsigned int ini_exposure;				//exposure time								
+	unsigned int ini_period;				//preiod cycle time							
 	std::vector<Pattern> PatSeqLUT_data;	//具体的条纹数据信息
-	unsigned int ini_ExtraSwapFlashNum = 0;
-	unsigned int ini_ExtraSwapFlashLUT[64] = { 0 };	//多余的没有被使用到的swapflash信息
+	unsigned int ini_ExtraSwapFlashNum;
+	unsigned int ini_ExtraSwapFlashLUT[64];	//多余的没有被使用到的swapflash信息
 	
 public:
 	//基本数据信息
@@ -60,21 +60,21 @@ public:
 	//状态信息 
 	bool is_connected;											//电脑是否连接着投影仪
 	bool is_standby;											//是否在电源standby中
-	bool is_validate = false;
+	bool is_validate;
 	bool SLmode;												//是否处在SLmode 两种情况 是 SLMODE 否VIDEOMODE
 	int trigMode;												//SLMODE 下 要么是 trigmode <= 2为 固定曝光的投影模式 sequence flash模式/video模式 trigmode > 2 变曝光的投影模式 sequence flash模式/video模式
 	bool isExtPatDisplayMode;									//是否是从外界获取的图像（还是从FLASH中加载）
-	unsigned int action = 3;										//处于何种投影状态。
+	unsigned int action;										//处于何种投影状态。
 	unsigned char Red, Green, Blue;								//三路电流 注意 一路为255就是2安培电流,一定不能让其所有都为亮
 
 	//用户需要定义的数据 注意目前只有isRepeat = true 才能使用
-	unsigned int exposure_time = 0;			//曝光时间
-	unsigned int period_time = 0;			//周期时间
-	bool isRepeat = true;					//是否是重复投影
+	unsigned int exposure_time;			//曝光时间
+	unsigned int period_time;			//周期时间
+	bool isRepeat;						//是否是重复投影
 	
 	//validate state
 	bool ExpOOR, PatNumOOR, TrigOutOverLap, BlkVecMiss, PatPeriodShort;
-	unsigned int ini_LutEntriesNum = 0;		//由多少图案构成 
+	unsigned int ini_LutEntriesNum;		//由多少图案构成 
 public:
 	Projector();	//构造函数	对象内部参量初始化 
 	~Projector();	//析构函数

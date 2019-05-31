@@ -45,9 +45,6 @@
     <ClInclude Include="targetver.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="PvApi.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="Projector.h">
       <Filter>头文件</Filter>
     </ClInclude>

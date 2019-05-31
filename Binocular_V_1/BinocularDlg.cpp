@@ -64,6 +64,7 @@ CBinocularDlg::~CBinocularDlg()
 	KillTimer(PROJ_FINDER_TIMER_ID);
 	//关闭特殊区域
 	DeleteCriticalSection(&Log_Protection);
+	DeleteCriticalSection(&Proj_Protection);
 }
 
 void CBinocularDlg::DoDataExchange(CDataExchange* pDX)
@@ -167,6 +168,8 @@ BOOL CBinocularDlg::OnInitDialog()
 	_left_expose_value.SetWindowText(_T("5000"));
 	_right_expose_value.SetWindowText(_T("5000"));
 
+
+
 	_left_ip = ntohl(inet_addr("192.168.1.3"));		//IP地址转换 将四个点分十进制转成2进制数 用于显示用于开启相机
 	_right_ip = ntohl(inet_addr("192.168.1.2"));
 	_setted_exp_val.Format(_T("%d"),5000);
@@ -180,18 +183,27 @@ BOOL CBinocularDlg::OnInitDialog()
 	_step_1.SetWindowText(_T("3"));
 	_step_2.SetWindowText(_T("3"));
 	_step_3.SetWindowText(_T("3"));
+	_triger_type.SetCurSel(1);
+
 	UpdateData(FALSE);
 
 	//开启关键区域
 	InitializeCriticalSection(&Log_Protection);
+	InitializeCriticalSection(&Proj_Protection);
 
 	//初始化投影仪
 	projector = new Projector();
 	
+	_edt_proj_exp.SetWindowTextA(_T("25000"));
+	_edt_proj_prd.SetWindowTextA(_T("25000"));
+
 	//开启定时器
 	SetTimer(CAM_FINDER_TIMER_ID, 1000, 0);
 	SetTimer(CAM_FRAMERATE_GET_ID, 1000, 0);
 	SetTimer(PROJ_FINDER_TIMER_ID, 1000, 0);
+	SetTimer(CAM_SHOW_PIC_L, 50, 0);
+	SetTimer(CAM_SHOW_PIC_R, 50, 0);
+
 	append_log(string("Enviroment Init Finished.\r\n"));
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
@@ -243,7 +255,7 @@ HCURSOR CBinocularDlg::OnQueryDragIcon()
 void CBinocularDlg::OnSelchangeCmbTrigger()
 {
 	//改变触发模式 直接设定了两个相机
-	//先获得
+	//先获得触发模式 和 曝光时间
 	int triger_mode = _triger_type.GetCurSel();
 	CString fixed_frame_rate_s;
 	if (left_Camera)
@@ -296,6 +308,7 @@ void CBinocularDlg::OnBnClickedBtnopenleft()
 		{
 			append_log(left_Camera->outLog);
 			OnSelchangeCmbTrigger();
+			OnBnClickedBtnSetexposel();
 		}
 			
 	}
@@ -315,6 +328,7 @@ void CBinocularDlg::OnBnClickedBtnopenleft()
 		{
 			append_log(left_Camera->outLog);
 			OnSelchangeCmbTrigger();
+			OnBnClickedBtnSetexposel();
 		}
 			
 	}
@@ -358,6 +372,7 @@ void CBinocularDlg::OnBnClickedBtnopenright()
 		{
 			append_log(right_Camera->outLog);
 			OnSelchangeCmbTrigger();
+			OnBnClickedBtnSetexposer();
 		}
 	}
 	else if (htonl(_right_ip) != right_Camera->IpAddr)	//如果相机存在 但IP不是 那么停止过去的相机 建立新的相机
@@ -376,6 +391,7 @@ void CBinocularDlg::OnBnClickedBtnopenright()
 		{
 			append_log(right_Camera->outLog);
 			OnSelchangeCmbTrigger();
+			OnBnClickedBtnSetexposer();
 		}
 	}
 	//IP对应的话 按钮无效 
@@ -508,6 +524,60 @@ void CBinocularDlg::update_projector_status()
 	
 }
 
+void CBinocularDlg::update_show(Camera* pt_cam, UINT ID)
+{
+	if (pt_cam == NULL)
+		return;
+	else
+	{
+		if (!pt_cam->isStreaming)
+			return;
+		else
+		{
+			Mat data;
+			pt_cam->GetImage(data);
+			CRect rect;
+
+			GetDlgItem(ID)->GetClientRect(&rect);
+			//调整图像宽度为4的倍数
+			if (rect.Width() % 4 != 0)
+			{
+				rect.SetRect(rect.left, rect.top, rect.left + (rect.Width() + 3) / 4 * 4, rect.bottom);
+				GetDlgItem(ID)->SetWindowPos(NULL, rect.left, rect.top, rect.Width(), rect.Height(), SWP_NOMOVE);
+			}
+
+			cv::resize(data, data, cv::Size(rect.Width(), rect.Height()),0,0,INTER_NEAREST);  //使图像适应控件大小 这是一个十分费时的操作
+
+			unsigned int m_buffer[sizeof(BITMAPINFOHEADER) + sizeof(RGBQUAD) * 256];
+			BITMAPINFO* m_bmi = (BITMAPINFO*)m_buffer;
+			BITMAPINFOHEADER* m_bmih = &(m_bmi->bmiHeader);
+
+			memset(m_bmih, 0, sizeof(*m_bmih));
+			m_bmih->biSize = sizeof(BITMAPINFOHEADER);
+			m_bmih->biWidth = data.cols;   //必须为4的倍数
+			m_bmih->biHeight = -data.rows; //在自下而上的位图中 高度为负
+			m_bmih->biPlanes = 1;
+			m_bmih->biCompression = BI_RGB;
+			m_bmih->biBitCount = 8 * data.channels();
+
+			if (data.channels() == 1)  //当图像为灰度图像时需要设置调色板颜色
+			{
+				for (int i = 0; i < 256; i++)
+				{
+					m_bmi->bmiColors[i].rgbBlue = i;
+					m_bmi->bmiColors[i].rgbGreen = i;
+					m_bmi->bmiColors[i].rgbRed = i;
+					m_bmi->bmiColors[i].rgbReserved = 0;
+				}
+			}
+
+			CDC *pDC = GetDlgItem(ID)->GetDC();
+			::StretchDIBits(pDC->GetSafeHdc(), 0, 0, rect.Width(), rect.Height(), 0, 0, rect.Width(), rect.Height(), data.data, (BITMAPINFO*)m_bmi, DIB_RGB_COLORS, SRCCOPY);
+			ReleaseDC(pDC);
+		}
+	}
+}
+
 unsigned long FindCamAddLog(string& Out)
 {
 	Out.clear();
@@ -587,9 +657,12 @@ void CBinocularDlg::OnTimer(UINT_PTR uId)
 		if (projector)
 		{
 			bool old_state = projector->is_connected;
-			bool new_state = projector->Discover_Timer_Call();
+			projector->Discover_Timer_Call();
+			bool new_state = projector->is_connected;
 			if (old_state != new_state)
 				append_log(projector->getLog());
+			else
+				projector->getLog();
 			update_projector_status();
 			_btn_closeproj.EnableWindow(true);
 			_btn_connectproj.EnableWindow(false);
@@ -599,6 +672,29 @@ void CBinocularDlg::OnTimer(UINT_PTR uId)
 			_btn_closeproj.EnableWindow(false);
 			_btn_connectproj.EnableWindow(true);
 		}
+		break;
+	}
+	case CAM_SHOW_PIC_L:
+	{
+		if (left_Camera)
+		{
+			if (left_Camera->isStreaming)
+			{
+				update_show(left_Camera, IDC_IMGSHOWL);
+			}
+		}
+		break;
+	}
+	case CAM_SHOW_PIC_R:
+	{
+		if (right_Camera)
+		{
+			if (right_Camera->isStreaming)
+			{
+				update_show(right_Camera, IDC_IMGSHOWR);
+			}
+		}
+		break;
 	}
 	/*
 		可以添加其他的时钟函数
@@ -631,7 +727,9 @@ void CBinocularDlg::OnBnClickedBtnStartacq()
 		append_log(string("Projector pattern number not match this setting."));
 		return;
 	}
-	//为相机创建一个自己的线程
+
+	
+	//为相机创建一个自己的线程 这个线程仅仅用来开启相机
 	if (left_Camera)
 	{
 		if (left_Camera->isStreaming == false)
@@ -642,6 +740,8 @@ void CBinocularDlg::OnBnClickedBtnStartacq()
 			buffer_left = new cv::Mat[size];
 			left_Camera->buffer = buffer_left;
 			left_Camera->buffer_size = size;
+			left_Camera->proj = projector;
+			left_Camera->proj_protect = &Proj_Protection;
 			left_thread = AfxBeginThread(Left_ThreadCapture, this);
 		}
 			
@@ -656,6 +756,8 @@ void CBinocularDlg::OnBnClickedBtnStartacq()
 			buffer_right = new cv::Mat[size];
 			right_Camera->buffer = buffer_right;
 			right_Camera->buffer_size = size;
+			right_Camera->proj = projector;
+			right_Camera->proj_protect = &Proj_Protection;
 			right_thread = AfxBeginThread(Right_ThreadCapture, this);
 		}
 	}
@@ -680,7 +782,7 @@ void CBinocularDlg::OnBnClickedBtnStopacq()
 			left_Camera->CloseCapture();
 			append_log(left_Camera->outLog);
 			delete[] buffer_left;
-			right_Camera->buffer = NULL;
+			left_Camera->buffer = NULL;
 			left_Camera->buffer_size = 0;
 			buffer_left = NULL;
 		}
@@ -939,7 +1041,6 @@ void CBinocularDlg::OnEnChangeEdtStep3()
 	_step_3.GetWindowText(cstr_step);
 	strtgy.col_steps[2] = _ttoi(cstr_step);
 }
-
 
 void CBinocularDlg::OnBnClickedCheck1()
 {

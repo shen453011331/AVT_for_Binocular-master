@@ -26,7 +26,12 @@ Projector::Projector()
 	firmwareTag[0] = '\0';
 	versionStr[0] = '\0';
 	is_standby = false;
-
+	is_connected = true;
+	SLmode = false;
+	action = 3;
+	period_time = 0;
+	exposure_time = 0;
+	isRepeat = true;
 	Log = "";
 	//≥ı ºªØtoken_list
 	token_list.clear();
@@ -99,7 +104,6 @@ bool Projector::Discover_Timer_Call()
 		}
 		else
 		{
-			Log = "projector is connected already.\r\n";
 			is_connected = true;
 			return true;
 		}
@@ -210,12 +214,14 @@ bool Projector::Discover_Timer_Call()
 			else
 			{
 				Log += "Connected failed, USB connect Error.\r\n";
+				is_connected = false;
 				return false;
 			}
 		}
 		else
 		{
 			Log += "Projector connected failed.\r\n";
+			is_connected = false;
 			return false;
 		}
 	}

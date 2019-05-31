@@ -15,6 +15,8 @@
 #define CAM_FINDER_TIMER_ID		1			//用于动态发现是否有相机接入/拔出的TIMER
 #define CAM_FRAMERATE_GET_ID    2			//用于动态获得相机图像张数的TIMER
 #define PROJ_FINDER_TIMER_ID	3			//用于动态发现是否有投影仪接入/拔出的TIMER
+#define CAM_SHOW_PIC_L			4			//用于展示左相机图像
+#define CAM_SHOW_PIC_R			5			//用于展示右相机图像
 #define MAX_CAMERA_NUM 20
 // CBinocularDlg 对话框
 class CBinocularDlg : public CDialogEx
@@ -67,13 +69,15 @@ public:
 
 	CComboBox _triger_type;
 	CEdit _log_ctrl;
+
 	CStatic _right_frate;
 	CStatic _left_frate;
+
 	CEdit _left_expose_value;
 	CEdit _right_expose_value;
 	CEdit _frame_set_l;
 	CEdit _frame_set_r;
-	CButton _is_saving;
+	
 	CMFCEditBrowseCtrl _dir_path;
 	CMFCEditBrowseCtrl _ini_path;
 
@@ -89,6 +93,9 @@ public:
 	CEdit _step_1;
 	CEdit _step_2;
 	CEdit _step_3;
+
+	CButton _is_saving;
+	CButton _is_repeat;
 
 	afx_msg void OnSelchangeCmbTrigger();
 	afx_msg void OnBnClickedBtnopenleft();
@@ -113,16 +120,18 @@ public:
 	afx_msg void OnEnChangeEdtStep1();
 	afx_msg void OnEnChangeEdtStep2();
 	afx_msg void OnEnChangeEdtStep3();
+	afx_msg void OnBnClickedCheck1();
 
 	CRITICAL_SECTION Log_Protection;		//日志单线程操作需要的保护
+	CRITICAL_SECTION Proj_Protection;		//用于保护相机 只有单个线程能够对相机进行USB读写操作
 
 	//各种有用的函数 今后可以添加在这里
 	void append_log(std::string& log_data);		//对Log进行添加
 	void update_projector_status();				//更新投影仪的状态信息
-	afx_msg void OnBnClickedCheck1();
-	CButton _is_repeat;
+	void update_show(Camera * cam, UINT ID);
+	
 };
 
-//单相机 单线程采集函数
+//单相机 单线程开始采集函数
 UINT Left_ThreadCapture(LPVOID lpParam);
 UINT Right_ThreadCapture(LPVOID lpParam);
