@@ -36,11 +36,28 @@
 //相机接口
 #include <PvApi.h>
 
+//投影仪接口
+#include "dlpc350_api.h"
+#include "dlpc350_common.h"
+#include "dlpc350_usb.h"
+#include "dlpc350_version.h"
+#include "dlpc350_firmware.h"
+#include "dlpc350_BMPParser.h"
+#include "dlpc350_error.h"
 
+//标准库函数
+#include <string>
+#include <thread>
+#include <vector>
+#include <iostream>
+#include <fstream>
+#include <chrono>
+#include <valarray>
 
-
-
-
+//标准c库
+#include <stdlib.h>
+#include <io.h>
+#include <direct.h>
 
 
 #ifdef _UNICODE

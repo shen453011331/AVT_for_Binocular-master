@@ -2,22 +2,7 @@
 #include "Projector.h"
 
 //投影仪操作库
-#include "dlpc350_api.h"
-#include "dlpc350_common.h"
-#include "dlpc350_usb.h"
-#include "dlpc350_version.h"
-#include "dlpc350_firmware.h"
-#include "dlpc350_BMPParser.h"
-#include "dlpc350_error.h"
 
-//标准std
-#include <iostream>
-#include <string>
-#include <stdlib.h>
-#include <fstream>
-#include <vector>
-#include <thread>
-#include <chrono>
 using namespace std;
 
 Projector::Projector()

@@ -4,11 +4,7 @@
 #include "BinocularDlg.h"
 #include "afxdialogex.h"
 
-#include <string>
-#include <thread>
 
-#include <io.h>
-#include <direct.h>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -48,7 +44,6 @@ END_MESSAGE_MAP()
 
 
 // CBinocularDlg 对话框
-
 CBinocularDlg::CBinocularDlg(CWnd* pParent /*=NULL*/)
 	: CDialogEx(IDD_BINOCULAR_V_1_DIALOG, pParent)
 {
@@ -126,6 +121,7 @@ BEGIN_MESSAGE_MAP(CBinocularDlg, CDialogEx)
 	ON_EN_CHANGE(IDC_EDT_STEP2, &CBinocularDlg::OnEnChangeEdtStep2)
 	ON_EN_CHANGE(IDC_EDT_STEP3, &CBinocularDlg::OnEnChangeEdtStep3)
 	ON_BN_CLICKED(IDC_CHECK1, &CBinocularDlg::OnBnClickedCheck1)
+	ON_BN_CLICKED(IDC_BTN_END, &CBinocularDlg::OnBnClickedBtnEnd)
 END_MESSAGE_MAP()
 
 
@@ -161,7 +157,7 @@ BOOL CBinocularDlg::OnInitDialog()
 	//所有Pv函数在使用前 需要添加PvInitialize()
 	PvInitialize();
 
-	_triger_type.SetCurSel(0);
+	_triger_type.SetCurSel(1);
 	_is_saving.SetCheck(0);
 	_frame_set_l.SetWindowText(_T("30"));
 	_frame_set_r.SetWindowText(_T("30"));
@@ -169,9 +165,9 @@ BOOL CBinocularDlg::OnInitDialog()
 	_right_expose_value.SetWindowText(_T("5000"));
 
 
-
-	_left_ip = ntohl(inet_addr("192.168.1.3"));		//IP地址转换 将四个点分十进制转成2进制数 用于显示用于开启相机
-	_right_ip = ntohl(inet_addr("192.168.1.2"));
+	//IP初始化
+	_left_ip = ntohl(inet_addr("192.168.1.10"));		
+	_right_ip = ntohl(inet_addr("192.168.1.9"));
 	_setted_exp_val.Format(_T("%d"),5000);
 	
 	strtgy.col_cycles = { 70,72,84 };
@@ -183,7 +179,6 @@ BOOL CBinocularDlg::OnInitDialog()
 	_step_1.SetWindowText(_T("3"));
 	_step_2.SetWindowText(_T("3"));
 	_step_3.SetWindowText(_T("3"));
-	_triger_type.SetCurSel(1);
 
 	UpdateData(FALSE);
 
@@ -297,7 +292,7 @@ void CBinocularDlg::OnBnClickedBtnopenleft()
 	{
 		left_Camera = new Camera(htonl(_left_ip), "Left");
 		left_Camera->isSaving = _is_saving.GetCheck();
-		_dir_path.GetWindowTextA(left_Camera->filepath);
+		_dir_path.GetWindowText(left_Camera->filepath);
 		if (!left_Camera->Open())
 		{
 			append_log(left_Camera->outLog);
@@ -317,7 +312,7 @@ void CBinocularDlg::OnBnClickedBtnopenleft()
 		OnBnClickedBtncloseright();
 		left_Camera = new Camera(htonl(_left_ip), "Left");
 		left_Camera->isSaving = _is_saving.GetCheck();
-		_dir_path.GetWindowTextA(left_Camera->filepath);
+		_dir_path.GetWindowText(left_Camera->filepath);
 		if (!left_Camera->Open())
 		{
 			append_log(left_Camera->outLog);
@@ -332,7 +327,10 @@ void CBinocularDlg::OnBnClickedBtnopenleft()
 		}
 			
 	}
-	//IP对应的话 按钮无效
+	else
+	{
+		//IP对应的话 按钮无效
+	}
 }
 
 //关闭左侧相机 
@@ -394,7 +392,10 @@ void CBinocularDlg::OnBnClickedBtnopenright()
 			OnBnClickedBtnSetexposer();
 		}
 	}
-	//IP对应的话 按钮无效 
+	else
+	{
+		//IP对应的话 按钮无效 
+	}
 }
 
 //关闭右侧相机
@@ -704,7 +705,8 @@ void CBinocularDlg::OnTimer(UINT_PTR uId)
 	}
 }
 
-//开始采集图像 调用完成后 相机处在拍摄状态 投影仪初始化完成 并等待play
+//初始化采集图像 调用完成后 相机处在拍摄状态 投影仪初始化完成 并等待play 
+//此条设定完成之后，禁止更新一些重要的参数：投影仪的相关设定
 void CBinocularDlg::OnBnClickedBtnStartacq()
 {
 	// TODO: 在此添加控件通知处理程序代码
@@ -734,17 +736,39 @@ void CBinocularDlg::OnBnClickedBtnStartacq()
 	{
 		if (left_Camera->isStreaming == false)
 		{
+			//新建用于交互的数据类型
 			if (buffer_left != NULL)
 				delete[] buffer_left;
 			buffer_left = NULL;
+
+			if (left_buffer_ready != NULL)
+				delete[] left_buffer_ready;
+			left_buffer_ready = NULL;
+
+			//一般来说，我们的程序在退出整体测量过程的时候，这里已经是清空的了
+			/*if (left_buffer_cs != NULL)
+				delete[] left_buffer_cs;
+			left_buffer_cs = NULL;*/
+
+			left_Camera->buffer_size = size;
+
 			buffer_left = new cv::Mat[size];
 			left_Camera->buffer = buffer_left;
-			left_Camera->buffer_size = size;
+			
+			left_buffer_ready = new bool[size]();
+			left_Camera->buffer_ready = left_buffer_ready;
+
+			left_buffer_cs = new CRITICAL_SECTION[size];
+			for (int i = 0; i < size; i++)
+			{
+				InitializeCriticalSection(&(left_buffer_cs[i]));
+			}
+			left_Camera->buffer_cs = left_buffer_cs;
+
 			left_Camera->proj = projector;
 			left_Camera->proj_protect = &Proj_Protection;
-			left_thread = AfxBeginThread(Left_ThreadCapture, this);
+			AfxBeginThread(Left_ThreadCapture, this);
 		}
-			
 	}
 	if (right_Camera)
 	{
@@ -753,38 +777,90 @@ void CBinocularDlg::OnBnClickedBtnStartacq()
 			if (buffer_right != NULL)
 				delete[] buffer_right;
 			buffer_right = NULL;
+
+			if (right_buffer_ready != NULL)
+				delete[] right_buffer_ready;
+			right_buffer_ready = NULL;
+
+			if (right_buffer_cs != NULL)
+				delete[] right_buffer_cs;
+			right_buffer_cs = NULL;
+
+			right_Camera->buffer_size = size;
+
 			buffer_right = new cv::Mat[size];
 			right_Camera->buffer = buffer_right;
-			right_Camera->buffer_size = size;
+
+			right_buffer_ready = new bool[size]();
+			right_Camera->buffer_ready = right_buffer_ready;
+
+			right_buffer_cs = new CRITICAL_SECTION[size];
+			for (int i = 0; i < size; i++)
+			{
+				InitializeCriticalSection(&(right_buffer_cs[i]));
+			}
+			right_Camera->buffer_cs = right_buffer_cs;
+
 			right_Camera->proj = projector;
 			right_Camera->proj_protect = &Proj_Protection;
-			right_thread = AfxBeginThread(Right_ThreadCapture, this);
+			AfxBeginThread(Right_ThreadCapture, this);
 		}
 	}
+
+	append_log(string("Mesurement setting init commplete."));
 }
-//停止采集图像
+
+//开始曝光拍摄（也许是运行的过程中结果乱了，导致漏帧，需要重新来）
+//注意，之前开始相机的时候，处于外触发等待的状态，这个函数之后，开始进行真正的采图
+//一共触发几次，拍摄多少张图，每张图代表是第几个相位的第几张，都是一个结构体定的。
+void CBinocularDlg::OnBnClickedBtnStartexp()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	//先开启相机 再开启投影仪
+	projector->GetSeqStatus();
+	if (projector->action != 2)
+	{
+		if (left_Camera)
+		{
+			if (left_Camera->isStreaming == false)
+			{
+				AfxBeginThread(Left_ThreadCapture, this);
+			}
+			else
+			{
+				left_Camera->CloseCapture();
+				append_log(left_Camera->outLog);
+				AfxBeginThread(Left_ThreadCapture, this);
+			}
+		}
+		if (right_Camera)
+		{
+			if (right_Camera->isStreaming == false)
+			{
+				AfxBeginThread(Right_ThreadCapture, this);
+			}
+			else
+			{
+				right_Camera->CloseCapture();
+				append_log(right_Camera->outLog);
+				AfxBeginThread(Right_ThreadCapture, this);
+			}
+		}
+		projector->Play();
+	}
+}
+
+//停止采集图像 由于相机是采用投影仪的触发时钟去运作，我们只需要让投影仪stop就可以了 这样相机也会处于一种暂停待命的模式，并且需要更新
 void CBinocularDlg::OnBnClickedBtnStopacq()
 {
 	// TODO: 在此添加控件通知处理程序代码
-	//先关闭投影仪 再关闭相机
-	if (projector->Stop() == false)
-	{
-		append_log(projector->getLog());
-		//return 
-	}
-	else
-		append_log(projector->getLog());
-
+	//先关闭相机 
 	if (left_Camera)
 	{
 		if (left_Camera->isStreaming)
 		{
 			left_Camera->CloseCapture();
 			append_log(left_Camera->outLog);
-			delete[] buffer_left;
-			left_Camera->buffer = NULL;
-			left_Camera->buffer_size = 0;
-			buffer_left = NULL;
 		}
 	}
 	if (right_Camera)
@@ -793,11 +869,75 @@ void CBinocularDlg::OnBnClickedBtnStopacq()
 		{
 			right_Camera->CloseCapture();
 			append_log(right_Camera->outLog);
-			delete[] buffer_right;
-			right_Camera->buffer = NULL;
-			right_Camera->buffer_size = 0;
-			buffer_right = NULL;
 		}
+	}
+
+	//再关闭投影仪
+	if (projector->Stop() == false)
+		append_log(projector->getLog());
+	else
+		append_log(projector->getLog());
+}
+
+//停止测量过程 将除去所有的测量记录 需要从头进行初始化。
+void CBinocularDlg::OnBnClickedBtnEnd()
+{
+	OnBnClickedBtnStopacq();
+	// TODO: 在此添加控件通知处理程序代码
+	
+	if (left_Camera)
+	{
+		if (left_Camera->isStreaming)
+		{
+			left_Camera->CloseCapture();
+			append_log(left_Camera->outLog);
+		}
+		delete[] buffer_left;
+		left_Camera->buffer = NULL;
+		buffer_left = NULL;
+
+		delete[] left_buffer_ready;
+		left_Camera->buffer_ready = NULL;
+		left_buffer_ready = NULL;
+		//手动关闭并释放空间
+		for (int i = 0; i < left_Camera->buffer_size; i++)
+		{
+			DeleteCriticalSection(&left_buffer_cs[i]);
+		}
+		delete[] left_buffer_cs;
+		left_buffer_cs = NULL;
+		left_Camera->buffer_cs = NULL;
+
+		left_Camera->buffer_size = 0;
+		buffer_left = NULL;
+
+	}
+	if (right_Camera)
+	{
+		if (right_Camera->isStreaming)
+		{
+			right_Camera->CloseCapture();
+			append_log(right_Camera->outLog);
+		}
+		delete[] buffer_right;
+		right_Camera->buffer = NULL;
+		buffer_right = NULL;
+
+		delete[] right_buffer_ready;
+		right_Camera->buffer_ready = NULL;
+		right_buffer_ready = NULL;
+		//手动关闭并释放空间
+		for (int i = 0; i < right_Camera->buffer_size; i++)
+		{
+			DeleteCriticalSection(&right_buffer_cs[i]);
+		}
+		delete[] right_buffer_cs;
+		right_buffer_cs = NULL;
+		right_Camera->buffer_cs = NULL;
+
+		right_Camera->buffer_size = 0;
+		buffer_right = NULL;
+
 	}
 }
 
@@ -831,9 +971,8 @@ void CBinocularDlg::OnBnClickedBtnSetexposel()
 		expose_v = _ttoi(expose_s);
 		if (!left_Camera->ChangeExposeValue(expose_v))
 		{
-			append_log(string("Wrnning: Left Camera changed expose val failed."));
+			append_log(left_Camera->outLog);
 		};
-		append_log(left_Camera->outLog);
 	}
 }
 
@@ -857,13 +996,37 @@ void CBinocularDlg::OnBnClickedBtnSetexposer()
 void CBinocularDlg::OnBnClickedChkIssaving()
 {
 	// TODO: 在此添加控件通知处理程序代码
+	
+	CString path;
+	_dir_path.GetWindowText(path);
+	int btn_state = _is_saving.GetCheck();
 	if (left_Camera)
 	{
-		left_Camera->isSaving = _is_saving.GetCheck();
+		if (btn_state == BST_UNCHECKED)
+			left_Camera->isSaving = false;
+		else if (btn_state == BST_CHECKED)
+		{
+			if (path == "")
+			{
+				append_log(string("No path avaliable"));
+				return;
+			}
+			left_Camera->isSaving = true;
+		}
 	}
 	if (right_Camera)
 	{
-		right_Camera->isSaving = _is_saving.GetCheck();
+		if (btn_state == BST_UNCHECKED)
+			right_Camera->isSaving = false;
+		else if (btn_state == BST_CHECKED)
+		{
+			if (path == "")
+			{
+				append_log(string("No path avaliable"));
+				return;
+			}
+			right_Camera->isSaving = true;
+		}
 	}
 }
 
@@ -877,17 +1040,16 @@ void CBinocularDlg::OnEnChangeMfceditbrowse1()
 	// TODO:  在此添加控件通知处理程序代码
 	//幅值给现在存在的相机
 	if (left_Camera)
-		_dir_path.GetWindowTextA(left_Camera->filepath);
+		_dir_path.GetWindowText(left_Camera->filepath);
 	if (right_Camera)
-		_dir_path.GetWindowTextA(right_Camera->filepath);
+		_dir_path.GetWindowText(right_Camera->filepath);
 
 	//不论相机是否存在 先创建一个文件夹
 	CString Path;
-	_dir_path.GetWindowTextA(Path);
+	_dir_path.GetWindowText(Path);
 	//在本文件夹下检测 是否有以相机名字命名的两个文件夹，如果有就采用。
 	CString left_Path = Path + "\\Left";
 	CString right_Path = Path + "\\Right";
-
 
 	//如果没有 新建
 	if (_access((LPSTR)(LPCTSTR)left_Path, 0) != 0)
@@ -900,14 +1062,7 @@ void CBinocularDlg::OnEnChangeMfceditbrowse1()
 	}
 }
 
-//开始曝光拍摄
-//注意，之前开始相机的时候，处于外触发等待的状态，这个函数之后，开始进行真正的采图
-//一共触发几次，拍摄多少张图，每张图代表是第几个相位的第几张，都是一个结构体定的。
-void CBinocularDlg::OnBnClickedBtnStartexp()
-{
-	// TODO: 在此添加控件通知处理程序代码
-	projector->Play();
-}
+
 
 void CBinocularDlg::OnEnChangeMfceditbrowse2()
 {
@@ -1047,10 +1202,13 @@ void CBinocularDlg::OnBnClickedCheck1()
 	// TODO: 在此添加控件通知处理程序代码
 	if (left_Camera)
 	{
-		left_Camera->is_reapeat = _is_repeat.GetCheck();
+		left_Camera->isRepeat = _is_repeat.GetCheck();
 	}
 	if (right_Camera)
 	{
-		right_Camera->is_reapeat = _is_repeat.GetCheck();
+		right_Camera->isRepeat = _is_repeat.GetCheck();
 	}
 }
+
+
+

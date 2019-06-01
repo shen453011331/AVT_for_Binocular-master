@@ -36,15 +36,29 @@ public:
 	Projector* projector;
 	unsigned long cam_online_num;
 	std::string log_buffer;
-	CWinThread* left_thread;
-	CWinThread* right_thread;
 	unsigned long frmcnt_buffer_l;
 	unsigned long frmcnt_buffer_r;
 
+	//用于计算相位和三维效果的参数 其中存储了原始图片 
+	//保证在处理的过程中，所有的图像ready标签都是最新的 即我们采用了最新的图进行了处理
 	cv::Mat* buffer_left;
+	bool* left_buffer_ready;
+	CRITICAL_SECTION* left_buffer_cs;	//在将相机的数据拿入从而进行处理的时候，我们需要按时的更新拍摄的图像	
+
 	cv::Mat* buffer_right;
-	
+	bool* right_buffer_ready;
+	CRITICAL_SECTION* right_buffer_cs;	//在将相机的数据拿入从而进行处理的时候，我们需要按时的更新拍摄的图像
+
+	//当采用GPU进行处理的时候，我们也可以将图片直接导入GPU中避免多余的拷贝，复制工作等。
+
+	//用于解相位的参数信息
 	Proj_Strategy strtgy;
+	std::vector<cv::Mat> left_warp_phase;		//左相机包裹相位	（按需要更新）
+	std::vector<cv::Mat> right_warp_phase;		//右相机包裹相位	（按需要更新）
+	cv::Mat left_unwarp_phase;					//左相机解包裹相位	（时刻更新）
+	cv::Mat right_unwarp_phase;					//右相机解包裹相位  （时刻更新）
+	
+
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 支持
 
@@ -130,6 +144,7 @@ public:
 	void update_projector_status();				//更新投影仪的状态信息
 	void update_show(Camera * cam, UINT ID);
 	
+	afx_msg void OnBnClickedBtnEnd();
 };
 
 //单相机 单线程开始采集函数

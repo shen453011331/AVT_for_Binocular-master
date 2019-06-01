@@ -38,10 +38,12 @@ public:
 	tPvFrame* pFrames;		//相机帧数据
 
 	cv::Mat* buffer;		//图像buffer
+	bool* buffer_ready;
 	cv::Mat show_buffer;	//图像buffer用于展示
-	Projector* proj = NULL;	//用于完成数据交互信息
+	Projector* proj;	//用于完成数据交互信息
+
 	int buffer_size;
-	bool is_reapeat = false;		//是否重复测量
+	bool isRepeat;		//是否重复测量
 	//状态变量
 	tPvUint32 Expose;		//相机曝光值			获得
 	int FrameRate;			//采集帧率				输入/初始化为30
@@ -77,8 +79,10 @@ public:
 	HANDLE NextProcess[THREADNUM];				//表示是否通知下个线程进行
 	
 	//线程互斥量
-	CRITICAL_SECTION show_read;
-	CRITICAL_SECTION* proj_protect;
+	CRITICAL_SECTION show_read;			//自己的
+	CRITICAL_SECTION* proj_protect;		//一个
+	CRITICAL_SECTION* buffer_cs;		//一串
+
 	int seqThreadState, proThreadState[THREADNUM];	//两类线程的控制量，用于结束while语句，实现线程停止。
 	int acqThreadState;
 	BYTE* Seq_Buffer;							//用于存入堆栈的图像buffer指针

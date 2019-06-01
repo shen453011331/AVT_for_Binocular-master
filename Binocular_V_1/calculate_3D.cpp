@@ -1,15 +1,10 @@
+#include "stdafx.h"
 #include "calculate_3D.h"
+
 
 #include <opencv2\highgui.hpp>
 #include <opencv2\imgproc.hpp>
 #include <opencv2\calib3d.hpp>
-
-#include <direct.h>
-#include <io.h>
-
-#include <fstream>
-#include <iostream>
-#include <valarray>
 
 using namespace std;
 using namespace cv;

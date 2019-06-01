@@ -1,27 +1,12 @@
 #include "stdafx.h"
 #include "Camera.h"
-#include <string>
 #include "Projector.h"
 
 using namespace std;
 //标准的空白构造函数
-Camera::Camera()
+Camera::Camera()//尽量不要使用这个构造函数 意味着要对其中的所有数据幅值
 {
-	H_Camera = 0;
-	IpAddr = 0;
-	Width = 0;
-	Height = 0;
-	BytesPerFrame = 0;
-	CameraName = "";
-	MaxSize = 0;
-	pFrames = NULL;
-	Expose = 0;
-	FrameRate = 30;
-	isStreaming = false;
-	TrigerMode = 0;
-	FrameCount = 0;
-	outLog = "Black data of Camera";
-	//初始化可能需要Initialized Protection
+
 }
 
 Camera::~Camera()
@@ -30,6 +15,7 @@ Camera::~Camera()
 	{
 		Close();
 	}
+	DeleteCriticalSection(&show_read);
 }
 
 Camera::Camera(tPvUint32 ip_addr, std::string cam_name)
@@ -46,12 +32,15 @@ Camera::Camera(tPvUint32 ip_addr, std::string cam_name)
 	FrameRate = 30;
 	isStreaming = false;
 	isSaving = false;
+	isRepeat = true;
 	TrigerMode = 0;
 	FrameCount = 0;
 	outLog = "Camera " + CameraName + " has been created.";
 	filepath = "";
 	//初始化交换buffer
 	Seq_Buffer = NULL;
+
+	InitializeCriticalSection(&show_read);
 }
 
 bool Camera::AttrSet(AttrType attrtype, const char* name, const char* value)
@@ -369,7 +358,7 @@ bool Camera::StartCapture()
 			InitThreads();
 			//已知相机的规格和图像大小 首先建立一个Seq_buffer的大小，以后这个buffer就固定了
 			Seq_Buffer = new unsigned char[Width*Height];
-			InitializeCriticalSection(&show_read);
+			
 			//建立两组线程 一个是单线程 用于拷贝
 			DWORD id;
 			CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)SeqThread, this, 0, &id);
@@ -465,7 +454,7 @@ bool Camera::CloseCapture()
 			pFrames = NULL;
 		}
 
-		DeleteCriticalSection(&show_read);
+		
 		//确定返回值
 		if (Err == ePvErrSuccess)
 		{
@@ -645,18 +634,23 @@ DWORD WINAPI ProThread(LPVOID param)
 		nextThreadNum = threadNum + 1;
 
 	int saving_circle = 0;
-	int frame_circle = 0;
+	int frame_circle = 0;	//这个参量要放到相机内部，从而在停止后，可以重新置位
 	while (this_cam->proThreadState[threadNum] > 0)
 	{		
 		int b_err = 0;
-		int SavingNum = threadNum + 1 + saving_circle*THREADNUM;//通过循环次数，获取图像序号 这就是用来存储图像的而已
+		int SavingNum = threadNum + 1 + saving_circle*THREADNUM;
 		int FrameNum = threadNum + 1 + frame_circle*THREADNUM;
 		if (WaitForSingleObject(this_cam->NextProcess[threadNum], INFINITE) == WAIT_OBJECT_0)
 			//用来接收上一个线程的信号，即上一个线程通知下一个线程可以开始对队列中图像进行预处理
 		{
 			ResetEvent(this_cam->NextProcess[threadNum]);				//重置本线程信号量
-			//b_err = getImage(this_cam, image, threadNum);//调用获取图像的函数 并且设置下一个线程信号量
-			b_err = getImage(this_cam, this_cam->buffer[((FrameNum-1)%this_cam->buffer_size)], threadNum);	//直接往我们的buffer里存图
+			EnterCriticalSection(&(this_cam->buffer_cs[((FrameNum) % this_cam->buffer_size)]));				//注意只有单线程可以对本数组单元格内的数据进行操作
+			b_err = getImage(this_cam, this_cam->buffer[((FrameNum)%this_cam->buffer_size)], threadNum);	//直接往我们的buffer里存图
+			if (b_err == 1)
+			{
+				this_cam->buffer_ready[((FrameNum) % this_cam->buffer_size)] = true;
+			}
+			LeaveCriticalSection(&(this_cam->buffer_cs[((FrameNum) % this_cam->buffer_size)]));				//拷贝完成数据之后我们就退出
 
 			//这里是并行存储
 			if (b_err == -1)		//如果线程要停止了，那就彻底停止该线程并退出(break)
@@ -674,7 +668,7 @@ DWORD WINAPI ProThread(LPVOID param)
 			{	
 				//一旦获取足够数量的图像 就停下拍摄 
 				EnterCriticalSection(this_cam->proj_protect);
-				if (this_cam->is_reapeat == false && FrameNum == 9)
+				if (this_cam->isRepeat == false && FrameNum == 9)
 				{
 					this_cam->proj->Stop();
 				}
@@ -684,9 +678,9 @@ DWORD WINAPI ProThread(LPVOID param)
 				if (this_cam->isSaving)
 				{
 					char filename[50];
-					sprintf(filename, "Frame%05d_%05d.bmp", SavingNum,FrameNum);	//第一个为存图的数量	第二个为获取图的数量
+					sprintf(filename, "Frame%05d_%05d.bmp", ((FrameNum) % this_cam->buffer_size),SavingNum);	//第一个为存图的数量	第二个为获取图的数量
 					string filename_all = this_cam->filepath + "\\" + this_cam->CameraName + "\\" + filename;
-					imwrite(filename_all, this_cam->buffer[((FrameNum-1)%this_cam->buffer_size)]);
+					imwrite(filename_all, this_cam->buffer[((FrameNum)%this_cam->buffer_size)]);
 					saving_circle++;
 				}
 				frame_circle++;
@@ -709,7 +703,7 @@ int getImage(Camera* this_cam, Mat & image, int threadNum)
 	if (!this_cam->processSequ.empty())//判断当前用于处理的堆栈是否为空
 	{
 		//若不空
-		image = this_cam->processSequ.front();			//提取序列最前图像		这里是浅拷贝，但是由于图像被pop了，所以并不影响，对image处理完是否会被处理掉，是否会造成内存泄露？并不影响程序运行
+		image = this_cam->processSequ.front();			//提取序列最前图像		这里是浅拷贝
 		this_cam->processSequ.pop_front();				//排出已提取图像
 		//已成功提取图像 那么可以开启下一个线程接着读入图像
 		return 1;
