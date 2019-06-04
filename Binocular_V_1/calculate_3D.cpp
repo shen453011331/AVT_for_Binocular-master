@@ -307,6 +307,29 @@ void coordinate_to_phase(const Mat& row_phase_map, const Mat& col_phase_map, con
 		phase_points.push_back(phase_pointf);
 	}
 }
+void sort_num(const vector<int>& in_vec, vector<int>& idx)
+{
+	/*将输入按从小到大排列 并记录原始的idx的顺序*/
+	vector<int> temp(in_vec);
+	idx.resize(in_vec.size());
+	for (int i = 0; i < idx.size(); i++)
+	{
+		idx[i] = i;
+	}
+	//排序 冒泡排序 idx一起跟随变动
+	int temp_int = 0;
+	for (int i = 0; i < temp.size() - 1; i++)
+	{
+		for (int j = 0; j < temp.size() - 1 - i; j++)
+		{
+			if (temp[j] > temp[j + 1])
+			{
+				swap(temp[j], temp[j + 1]);
+				swap(idx[j], idx[j + 1]);
+			}
+		}
+	}
+}
 //头文件中的函数
 /*最小二乘法等步相移 获得包裹相位*/
 bool Get_Wrap_Phase_Steps(vector<Mat>& src_img, Mat& wraped_phase)
@@ -414,35 +437,30 @@ void Init_Phase_Map_From_Load(const string& col_phase_dir, const Proj_Strategy& 
 	col_aphase_map = buffer.clone();
 }
 /*三波长解相方法*/
-//当双波长解相方法精度并不是那么高的时候，使用。
-void Get_Absolute_Phase_3(vector<Mat>& ph_img, vector<int> cycle, Mat& out,bool need_filter)
+//当双波长解相方法精度并不是那么高的时候，使用。 基频是最后一个
+void Get_Absolute_Phase_3(const vector<Mat>& ph_img,const vector<int>& cycle, Mat& out,bool need_filter)
 {
-	//利用两个包裹相位 计算两个波长更长的相位
+	//利用两个包裹相位 计算两个波长更长的相位 顺序 72 75 90 输入的图像要么严格遵守该顺序，要么改写下列方法
 	Mat fh[3];
+	//排序 并记录变换结果
+	vector<int> idx;
+	sort_num(cycle, idx);
 	//注意，永远是短波长减长波长
-	fh[0] = ph_img[0] - ph_img[1];//35-36/70-72等类似的
-	float fh1_cycle = 0;
-	if (cycle[2] < cycle[0])
-	{
-		fh[1] = ph_img[2] - ph_img[1];
-		fh1_cycle = float(cycle[2] * cycle[1]) / float(cycle[1] - cycle[2]);
-	}
-	else if (cycle[2] > cycle[1])
-	{
-		fh[1] = ph_img[0] - ph_img[2];
-		fh1_cycle = float(cycle[2] * cycle[0]) / float(cycle[2] - cycle[0]);
-	}
+	fh[0] = ph_img[idx[0]] - ph_img[idx[1]];
+	fh[1] = ph_img[idx[0]] - ph_img[idx[2]];
 	//注意 这里是一个浅复制
-	fh[2] = ph_img[2];			
+	fh[2] = ph_img[idx[0]];			
 
 	float cycle_new[3] =
 	{
-		float(cycle[0] * cycle[1]) / float(cycle[1] - cycle[0]),
-		fh1_cycle,
-		float(cycle[2])			
+		float(cycle[idx[0]] * cycle[idx[1]]) / float(cycle[idx[1]] - cycle[idx[0]]),
+		float(cycle[idx[0]] * cycle[idx[2]]) / float(cycle[idx[2]] - cycle[idx[0]]),
+		float(cycle[idx[0]])
 	};
-	int height = ph_img[0].size().height;
-	int width = ph_img[0].size().width;
+
+	int height = ph_img[idx[0]].size().height;
+	int width = ph_img[idx[0]].size().width;
+
 	//消除其中超过PI或者小于-PI的点
 	int i, j, k;
 	for (i = 0; i < 2; i++)
@@ -458,40 +476,52 @@ void Get_Absolute_Phase_3(vector<Mat>& ph_img, vector<int> cycle, Mat& out,bool 
 	}
 	//每一个点条纹级次存储
 	Mat foit[3];
-	for (i = 0; i < 3; i++)
+	for (i = 1; i < 3; i++)
 		foit[i] = Mat::zeros(height, width, CV_32FC1);
 
+	//尽量不要采用底层指针操作，而使用OpenCV封装好的操作 其调用一些高级的语法命令 能够提高我们的处理速度
+	foit[1] = (((cycle_new[0] / cycle_new[1])* fh[0]) - fh[1]) / (2 * CV_PI);
 	for (int i = 0; i < height; i++)
 		for (int j = 0; j < width; j++)
-			foit[1].ptr<float>(i)[j] = round(((cycle_new[0] / cycle_new[1])* fh[0].ptr<float>(i)[j] - fh[1].ptr<float>(i)[j]) / (2 * CV_PI));
+			foit[1].ptr<float>(i)[j] = round(foit[1].ptr<float>(i)[j]);
 	//小模版中值滤波一次
-	medianBlur(foit[1], foit[1], 3);
+	if (need_filter)
+		medianBlur(foit[1], foit[1], 3);
+
+	foit[2] = ((cycle_new[1] / cycle_new[2]) * (foit[1] * 2 * CV_PI + fh[1]) - fh[2]) / (2 * CV_PI);
 	for (int i = 0; i < height; i++)
 		for (int j = 0; j < width; j++)
-			foit[2].ptr<float>(i)[j] = round(((cycle_new[1] / cycle_new[2]) * (foit[1].ptr<float>(i)[j] * 2 * CV_PI + fh[1].ptr<float>(i)[j]) - fh[2].ptr<float>(i)[j]) / (2 * CV_PI));
-	medianBlur(foit[2], foit[2], 3);
+			foit[2].ptr<float>(i)[j] = round(foit[2].ptr<float>(i)[j]);
+	if (need_filter)
+		medianBlur(foit[2], foit[2], 3);
 
 	out.create(height, width, CV_32FC1);
 	out = foit[2] * 2 * CV_PI + fh[2];
-	//cv::medianBlur(out, out, 3);
+	if (need_filter)
+		cv::medianBlur(out, out, 3);
 }
 
 /*双波长解相方法*/
-void Get_Absolute_Phase_2(vector<Mat>& ph_img, vector<int> cycle, Mat& out,bool need_filter)
+void Get_Absolute_Phase_2(const vector<Mat>& ph_img, const vector<int>& cycle, Mat& out,bool need_filter)
 {
 	//利用两个包裹相位 计算两个波长更长的相位
 	Mat fh[2];
-	fh[0] = ph_img[0] - ph_img[1];
-	fh[1] = ph_img[1];
+	vector<int> idx;
+	int offset = 0;
+	sort_num(cycle, idx);	//idx代表从小到大排列的参数信息
+	if (cycle.size() != 2)
+		offset = cycle.size() - 2;
+	fh[0] = ph_img[idx[0+offset]] - ph_img[idx[1 + offset]];
+	fh[1] = ph_img[idx[0 + offset]];
 
 	float cycle_new[2] =
 	{
-		float(cycle[0] * cycle[1]) / float(cycle[1] - cycle[0]),
-		float(cycle[1])
+		float(cycle[idx[0 + offset]] * cycle[idx[1 + offset]]) / float(cycle[idx[1 + offset]] - cycle[idx[0 + offset]]),
+		float(cycle[idx[0 + offset]])
 	};
 
-	int height = ph_img[0].size().height;
-	int width = ph_img[0].size().width;
+	int height = ph_img[idx[0 + offset]].size().height;
+	int width = ph_img[idx[0 + offset]].size().width;
 
 	//消除其中超过PI或者小于-PI的点
 	int i, j, k;
@@ -529,8 +559,11 @@ void Get_Absolute_Phase_2(vector<Mat>& ph_img, vector<int> cycle, Mat& out,bool 
 	foit.convertTo(foit, CV_32FC1);
 	out = foit * 2 * CV_PI + fh[1];
 	//由于在条纹边界处，还是会有很不好的效果，所以我们进一步对out进行中值滤波
-	medianBlur(out, out, 3);
-	medianBlur(out, out, 3);
+	if (need_filter)
+	{
+		medianBlur(out, out, 3);
+		medianBlur(out, out, 3);
+	}
 }
 
 /*拟合直线*/

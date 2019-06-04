@@ -111,8 +111,8 @@ void Save_Points(const std::vector<cv::Point3f>& points, const std::string& file
 /********** 投影重建相关 **********/
 bool Get_Wrap_Phase_Steps(std::vector<cv::Mat>& src_img, cv::Mat& wraped_phase);
 void Init_Phase_Map_From_Load(const std::string& col_phase_dir, const Proj_Strategy& strtgy, cv::Mat& col_aphase_map, bool,bool);
-void Get_Absolute_Phase_3(std::vector<cv::Mat>& ph_img, std::vector<int> cycle, cv::Mat& out, bool need_filter = false);
-void Get_Absolute_Phase_2(std::vector<cv::Mat>& ph_img, std::vector<int> cycle, cv::Mat& out,bool need_filter = false);
+void Get_Absolute_Phase_3(const std::vector<cv::Mat>& ph_img, const std::vector<int>& cycle, cv::Mat& out, bool need_filter = false);
+void Get_Absolute_Phase_2(const std::vector<cv::Mat>& ph_img, const std::vector<int>& cycle, cv::Mat& out,bool need_filter = false);
 float Fit_Line(const cv::Mat& aphase_map, bool is_row, Line_1D& line);
 void Get_Final_PhaseV1(const std::string& phase_dir_name, const Proj_Strategy& strtgy, const cv::Mat& aphase2, cv::Mat& aphase3);
 void Get_Final_PhaseV2(const std::string& phase_dir_name, const Proj_Strategy& strtgy, cv::Mat& aphase3);

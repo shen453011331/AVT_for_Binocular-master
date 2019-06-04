@@ -32,7 +32,7 @@ Camera::Camera(tPvUint32 ip_addr, std::string cam_name)
 	FrameRate = 30;
 	isStreaming = false;
 	isSaving = false;
-	isRepeat = true;
+	isRepeat = false;
 	TrigerMode = 0;
 	FrameCount = 0;
 	outLog = "Camera " + CameraName + " has been created.";
@@ -369,7 +369,7 @@ bool Camera::StartCapture()
 				t_info[tNum].num = tNum;
 				t_info[tNum].ptr = this;
 				CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)ProThread, &t_info[tNum], 0, &id);
-				Sleep(3);		
+				Sleep(10);		
 			}
 			//以上内容可以放在一个threadInit()函数里
 			//发送相机命令
@@ -607,7 +607,7 @@ DWORD WINAPI SeqThread(LPVOID param)
 			EnterCriticalSection(&this_cam->show_read);
 			memcpy(this_cam->show_buffer.data, this_cam->Seq_Buffer, (this_cam->Width)*(this_cam->Height));
 			LeaveCriticalSection(&this_cam->show_read);
-			this_cam->frameSequ.push_back(this_cam->show_buffer);												//将mat类存入一个mat的deque变量中，用于后面存，前面取
+			this_cam->frameSequ.push_back(this_cam->show_buffer.clone());												//将mat类存入一个mat的deque变量中，用于后面存，前面取
 			//当swap有效的时候，调用swap方法将数据转给processSequ
 			if (WaitForSingleObject(this_cam->swap, 0) == WAIT_OBJECT_0)							//这个就是判断当前processSequ是否为空的信号量
 			{
@@ -639,18 +639,18 @@ DWORD WINAPI ProThread(LPVOID param)
 	{		
 		int b_err = 0;
 		int SavingNum = threadNum + 1 + saving_circle*THREADNUM;
-		int FrameNum = threadNum + 1 + frame_circle*THREADNUM;
+		int FrameNum = threadNum + frame_circle*THREADNUM;
 		if (WaitForSingleObject(this_cam->NextProcess[threadNum], INFINITE) == WAIT_OBJECT_0)
 			//用来接收上一个线程的信号，即上一个线程通知下一个线程可以开始对队列中图像进行预处理
 		{
 			ResetEvent(this_cam->NextProcess[threadNum]);				//重置本线程信号量
-			EnterCriticalSection(&(this_cam->buffer_cs[((FrameNum) % this_cam->buffer_size)]));				//注意只有单线程可以对本数组单元格内的数据进行操作
-			b_err = getImage(this_cam, this_cam->buffer[((FrameNum)%this_cam->buffer_size)], threadNum);	//直接往我们的buffer里存图
+			EnterCriticalSection(&(this_cam->buffer_cs[((FrameNum+1) % this_cam->buffer_size)]));				//注意只有单线程可以对本数组单元格内的数据进行操作
+			b_err = getImage(this_cam, this_cam->buffer[((FrameNum+1)%this_cam->buffer_size)], threadNum);	//直接往我们的buffer里存图
 			if (b_err == 1)
 			{
-				this_cam->buffer_ready[((FrameNum) % this_cam->buffer_size)] = true;
+				this_cam->buffer_ready[((FrameNum+1) % this_cam->buffer_size)] = true;
 			}
-			LeaveCriticalSection(&(this_cam->buffer_cs[((FrameNum) % this_cam->buffer_size)]));				//拷贝完成数据之后我们就退出
+			LeaveCriticalSection(&(this_cam->buffer_cs[((FrameNum+1) % this_cam->buffer_size)]));				//拷贝完成数据之后我们就退出
 
 			//这里是并行存储
 			if (b_err == -1)		//如果线程要停止了，那就彻底停止该线程并退出(break)
@@ -668,19 +668,22 @@ DWORD WINAPI ProThread(LPVOID param)
 			{	
 				//一旦获取足够数量的图像 就停下拍摄 
 				EnterCriticalSection(this_cam->proj_protect);
-				if (this_cam->isRepeat == false && FrameNum == 9)
+				/*if (this_cam->isRepeat == false && FrameNum == 9)
 				{
 					this_cam->proj->Stop();
-				}
+				}*/
 				LeaveCriticalSection(this_cam->proj_protect);
 				SetEvent(this_cam->NextProcess[nextThreadNum]);				//获得图像成功，让位置给下一个线程
 				//多线程并行进行图像存储
 				if (this_cam->isSaving)
 				{
 					char filename[50];
-					sprintf(filename, "Frame%05d_%05d.bmp", ((FrameNum) % this_cam->buffer_size),SavingNum);	//第一个为存图的数量	第二个为获取图的数量
+					if (this_cam->isRepeat == false)
+						sprintf(filename, "Frame%05d.bmp", ((FrameNum+1) % this_cam->buffer_size));	//第一个为存图的数量	第二个为获取图的数量
+					else
+						sprintf(filename, "Frame%05d_%05d.bmp", ((FrameNum + 1) % this_cam->buffer_size), SavingNum);
 					string filename_all = this_cam->filepath + "\\" + this_cam->CameraName + "\\" + filename;
-					imwrite(filename_all, this_cam->buffer[((FrameNum)%this_cam->buffer_size)]);
+					imwrite(filename_all, this_cam->buffer[((FrameNum+1)%this_cam->buffer_size)]);
 					saving_circle++;
 				}
 				frame_circle++;
@@ -703,7 +706,7 @@ int getImage(Camera* this_cam, Mat & image, int threadNum)
 	if (!this_cam->processSequ.empty())//判断当前用于处理的堆栈是否为空
 	{
 		//若不空
-		image = this_cam->processSequ.front();			//提取序列最前图像		这里是浅拷贝
+		this_cam->processSequ.front().copyTo(image);	//提取序列最前列图像 深拷贝，是要消费大量的时间的
 		this_cam->processSequ.pop_front();				//排出已提取图像
 		//已成功提取图像 那么可以开启下一个线程接着读入图像
 		return 1;

@@ -1,4 +1,7 @@
 // BinocularDlg.cpp : 实现文件
+/*
+注意 不建议在MFC中调用WINAPI的CreatThread函数创建线程，那种是底层方法，实际的MFC对线程有自己的管理体系，建议使用AFXcreatthread
+*/
 #include "stdafx.h"
 #include "Binocular_V_1.h"
 #include "BinocularDlg.h"
@@ -53,6 +56,7 @@ CBinocularDlg::CBinocularDlg(CWnd* pParent /*=NULL*/)
 
 CBinocularDlg::~CBinocularDlg()
 {
+	OnBnClickedBtnEnd();
 	//关闭定时器
 	KillTimer(CAM_FINDER_TIMER_ID);
 	KillTimer(CAM_FRAMERATE_GET_ID);
@@ -90,6 +94,10 @@ void CBinocularDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_EDT_STEP2, _step_2);
 	DDX_Control(pDX, IDC_EDT_STEP3, _step_3);
 	DDX_Control(pDX, IDC_CHECK1, _is_repeat);
+	DDX_Control(pDX, IDC_BTN_STARTEXP, _btn_startexp);
+	DDX_Control(pDX, IDC_BTN_UNWARP, _btn_unwarp);
+	DDX_Control(pDX, IDC_BTN_CALC3D, _btn_calc3d);
+	DDX_Control(pDX, IDC_BTN_STOPACQ, _btn_stopacq);
 }
 
 BEGIN_MESSAGE_MAP(CBinocularDlg, CDialogEx)
@@ -122,6 +130,7 @@ BEGIN_MESSAGE_MAP(CBinocularDlg, CDialogEx)
 	ON_EN_CHANGE(IDC_EDT_STEP3, &CBinocularDlg::OnEnChangeEdtStep3)
 	ON_BN_CLICKED(IDC_CHECK1, &CBinocularDlg::OnBnClickedCheck1)
 	ON_BN_CLICKED(IDC_BTN_END, &CBinocularDlg::OnBnClickedBtnEnd)
+	ON_BN_CLICKED(IDC_BTN_UNWARP, &CBinocularDlg::OnBnClickedBtnUnwarp)
 END_MESSAGE_MAP()
 
 
@@ -305,7 +314,6 @@ void CBinocularDlg::OnBnClickedBtnopenleft()
 			OnSelchangeCmbTrigger();
 			OnBnClickedBtnSetexposel();
 		}
-			
 	}
 	else if (htonl(_left_ip) != left_Camera->IpAddr)	//如果相机存在 但IP不是 那么停止过去的相机 建立新的相机
 	{
@@ -325,7 +333,6 @@ void CBinocularDlg::OnBnClickedBtnopenleft()
 			OnSelchangeCmbTrigger();
 			OnBnClickedBtnSetexposel();
 		}
-			
 	}
 	else
 	{
@@ -521,8 +528,6 @@ void CBinocularDlg::update_projector_status()
 		((CButton*)GetDlgItem(IDC_RAD_ISSTOP))->SetCheck(false);		//停止状态
 		((CButton*)GetDlgItem(IDC_RAD_VALIDPASS))->SetCheck(false);		//验证完毕状态
 	}
-
-	
 }
 
 void CBinocularDlg::update_show(Camera* pt_cam, UINT ID)
@@ -706,18 +711,40 @@ void CBinocularDlg::OnTimer(UINT_PTR uId)
 }
 
 //初始化采集图像 调用完成后 相机处在拍摄状态 投影仪初始化完成 并等待play 
+
 //此条设定完成之后，禁止更新一些重要的参数：投影仪的相关设定
 void CBinocularDlg::OnBnClickedBtnStartacq()
 {
 	// TODO: 在此添加控件通知处理程序代码
+	//先停止过去的测量
+	OnBnClickedBtnStopacq();
+	OnBnClickedBtnEnd();
+
+	//再开始新的测量过程
 	if (projector->exposure_time < 230 || projector->period_time < 230 || projector->ini_file_path == "")
 	{
 		append_log(string("Error: Projector do not have enough paras.(exp/prd time, ini file path)"));
+		//如果 投影仪不在投影状态 禁用下列的按钮
+		if (projector->action != 2)
+		{
+			_btn_startexp.EnableWindow(false);
+			_btn_unwarp.EnableWindow(false);
+			_btn_calc3d.EnableWindow(false);
+			_btn_stopacq.EnableWindow(false);
+		}
 		return;
 	}
 	if (projector->Projector_Init() == false)
 	{
 		append_log(projector->getLog());
+		//如果 投影仪不在投影状态 禁用下列的按钮
+		if (projector->action != 2)
+		{
+			_btn_startexp.EnableWindow(false);
+			_btn_unwarp.EnableWindow(false);
+			_btn_calc3d.EnableWindow(false);
+			_btn_stopacq.EnableWindow(false);
+		}
 		return;
 	}
 	append_log(projector->getLog());
@@ -727,6 +754,14 @@ void CBinocularDlg::OnBnClickedBtnStartacq()
 	if (size != projector->ini_LutEntriesNum)
 	{
 		append_log(string("Projector pattern number not match this setting."));
+		//如果 投影仪不在投影状态 禁用下列的按钮
+		if (projector->action != 2)
+		{
+			_btn_startexp.EnableWindow(false);
+			_btn_unwarp.EnableWindow(false);
+			_btn_calc3d.EnableWindow(false);
+			_btn_stopacq.EnableWindow(false);
+		}
 		return;
 	}
 
@@ -767,8 +802,12 @@ void CBinocularDlg::OnBnClickedBtnStartacq()
 
 			left_Camera->proj = projector;
 			left_Camera->proj_protect = &Proj_Protection;
-			AfxBeginThread(Left_ThreadCapture, this);
+			left_need_unwrap = true;
 		}
+	}
+	else
+	{
+		left_need_unwrap = false;
 	}
 	if (right_Camera)
 	{
@@ -782,9 +821,9 @@ void CBinocularDlg::OnBnClickedBtnStartacq()
 				delete[] right_buffer_ready;
 			right_buffer_ready = NULL;
 
-			if (right_buffer_cs != NULL)
-				delete[] right_buffer_cs;
-			right_buffer_cs = NULL;
+			//if (right_buffer_cs != NULL)
+			//	delete[] right_buffer_cs;
+			//right_buffer_cs = NULL;
 
 			right_Camera->buffer_size = size;
 
@@ -803,21 +842,29 @@ void CBinocularDlg::OnBnClickedBtnStartacq()
 
 			right_Camera->proj = projector;
 			right_Camera->proj_protect = &Proj_Protection;
-			AfxBeginThread(Right_ThreadCapture, this);
+			right_need_unwrap = true;
 		}
 	}
+	else
+	{
+		right_need_unwrap = false;
+	}
+
 
 	append_log(string("Mesurement setting init commplete."));
 }
 
 //开始曝光拍摄（也许是运行的过程中结果乱了，导致漏帧，需要重新来）
+
 //注意，之前开始相机的时候，处于外触发等待的状态，这个函数之后，开始进行真正的采图
+
 //一共触发几次，拍摄多少张图，每张图代表是第几个相位的第几张，都是一个结构体定的。
 void CBinocularDlg::OnBnClickedBtnStartexp()
 {
 	// TODO: 在此添加控件通知处理程序代码
 	//先开启相机 再开启投影仪
 	projector->GetSeqStatus();
+	Sleep(200);
 	if (projector->action != 2)
 	{
 		if (left_Camera)
@@ -846,6 +893,7 @@ void CBinocularDlg::OnBnClickedBtnStartexp()
 				AfxBeginThread(Right_ThreadCapture, this);
 			}
 		}
+		Sleep(200);
 		projector->Play();
 	}
 }
@@ -884,7 +932,20 @@ void CBinocularDlg::OnBnClickedBtnEnd()
 {
 	OnBnClickedBtnStopacq();
 	// TODO: 在此添加控件通知处理程序代码
+
+	//先让重建的线程停止
+	if (left_need_unwrap == true)
+	{
+		left_need_unwrap = false;
+		WaitForSingleObject(left_unwrap_h,INFINITY);		//直到线程退出才停止
+	}
+	if (right_need_unwrap == true)
+	{
+		right_need_unwrap = false;
+		WaitForSingleObject(right_unwrap_h, INFINITY);		//直到线程退出才停止
+	}
 	
+	//然后再关闭相机
 	if (left_Camera)
 	{
 		if (left_Camera->isStreaming)
@@ -937,7 +998,6 @@ void CBinocularDlg::OnBnClickedBtnEnd()
 
 		right_Camera->buffer_size = 0;
 		buffer_right = NULL;
-
 	}
 }
 
@@ -959,6 +1019,7 @@ UINT Right_ThreadCapture(LPVOID lpParam)
 	return bCapture;
 }
 
+
 //改变曝光值
 void CBinocularDlg::OnBnClickedBtnSetexposel()
 {
@@ -971,8 +1032,9 @@ void CBinocularDlg::OnBnClickedBtnSetexposel()
 		expose_v = _ttoi(expose_s);
 		if (!left_Camera->ChangeExposeValue(expose_v))
 		{
-			append_log(left_Camera->outLog);
+			append_log(string("Wrnning: Left Camera changed expose val failed."));
 		};
+		append_log(left_Camera->outLog);
 	}
 }
 
@@ -1211,4 +1273,183 @@ void CBinocularDlg::OnBnClickedCheck1()
 }
 
 
+//工作者线程函数 目前只重建左方相机
+UINT Left_ThreadUnwarp(LPVOID lpParam)
+{
+	CBinocularDlg *dlg = (CBinocularDlg*)lpParam;
+	int pic_count = 1;
+	unsigned int all_size = dlg->strtgy.col_steps[0] + dlg->strtgy.col_steps[1] + dlg->strtgy.col_steps[2];		//图样总大小
+	int count = 0;		//用于表示到底用了多少个波长 单频有单频的解相方法，多频有多频的解相方法 max = 3 
+	for (int i = 0; i < dlg->strtgy.col_steps.size(); i++)
+	{
+		if (dlg->strtgy.col_steps[i] != 0)
+		{
+			count++;
+		}	
+	}
 
+	vector<vector<cv::Mat>> func_img_buffer;		//函数内部的图像接收 这个类仅作为图像接口 我们不能拿动态更新的图像来做 这要求我们需要采用它来实现
+	vector<cv::Mat> func_wrap_phase;				//最多接受3波长
+	cv::Mat func_unwrap_phase;						//最后的绝对相位结果
+
+	func_wrap_phase.resize(3);
+	func_img_buffer.resize(3);						
+	for (int i = 0; i < count; i++)
+	{
+		func_img_buffer[i].resize(dlg->strtgy.col_steps[i]);
+	}
+	bool cycle_pattern_changed[3];
+	cycle_pattern_changed[0] = false;
+	cycle_pattern_changed[1] = false;
+	cycle_pattern_changed[2] = false;
+
+	while (dlg->left_need_unwrap)
+	{
+		//首先从类中读取图像 检验该图像是否已经被读取，并且注意线程安全性（意图：尽量少干涉采集过程）
+		for (int i = 0; i < all_size; i++)
+		{		
+			if (dlg->left_buffer_ready[i] == true)	//如果这一帧图像准备好了 判断它是谁的 存图，并且将需要计算包裹相位的结构置位，重建相位。
+			{
+				EnterCriticalSection(&(dlg->left_buffer_cs[i]));
+				if (i >= 0 && i < dlg->strtgy.col_steps[0])
+				{
+					func_img_buffer[0][i] = dlg->buffer_left[i].clone();
+					cycle_pattern_changed[0] = true;
+				}
+				if (i >= dlg->strtgy.col_steps[0] && i < dlg->strtgy.col_steps[0] + dlg->strtgy.col_steps[1])
+				{
+					func_img_buffer[1][i - dlg->strtgy.col_steps[0]] = dlg->buffer_left[i].clone();
+					cycle_pattern_changed[1] = true;
+				}
+				if (i >= dlg->strtgy.col_steps[1] + dlg->strtgy.col_steps[2] && i < all_size)
+				{
+					func_img_buffer[2][i - dlg->strtgy.col_steps[0] - dlg->strtgy.col_steps[1]] = dlg->buffer_left[i].clone();
+					cycle_pattern_changed[2] = true;
+				}	
+				LeaveCriticalSection(&(dlg->left_buffer_cs[i]));
+			}
+		}
+		//接着针对其计算包裹相位，注意，对于已经重建相位的图像，我们不需要重新重建。从而提高本线程的处理速度 
+		//注意 需要判断是否每个存储空间里都有图了
+		if (cycle_pattern_changed[0])
+		{
+			bool _calculate_wrap = true;
+			for (int i = 0; i < func_img_buffer[0].size(); i++)
+			{
+				if (func_img_buffer[0][i].empty())
+				{
+					_calculate_wrap = false;
+					break;
+				}
+			}
+			if (_calculate_wrap)
+			{
+				Get_Wrap_Phase_Steps(func_img_buffer[0], func_wrap_phase[0]);
+				cycle_pattern_changed[0] = false;
+			}
+		}
+		if (cycle_pattern_changed[1])
+		{
+			bool _calculate_wrap = true;
+			for (int i = 0; i < func_img_buffer[1].size(); i++)
+			{
+				if (func_img_buffer[1][i].empty())
+				{
+					_calculate_wrap = false;
+					break;
+				}
+			}
+			if (_calculate_wrap)
+			{
+				Get_Wrap_Phase_Steps(func_img_buffer[1], func_wrap_phase[1]);
+				cycle_pattern_changed[1] = false;
+			}
+		}
+		if (cycle_pattern_changed[2])
+		{
+			bool _calculate_wrap = true;
+			for (int i = 0; i < func_img_buffer[2].size(); i++)
+			{
+				if (func_img_buffer[2][i].empty())
+				{
+					_calculate_wrap = false;
+					break;
+				}
+			}
+			if (_calculate_wrap)
+			{
+				Get_Wrap_Phase_Steps(func_img_buffer[2], func_wrap_phase[2]);
+				cycle_pattern_changed[2] = false;
+			}
+		}
+		
+		//最后 计算解包裹相位 注意 这里需要判断到底我们采用了是几张图像。同样 需要判断里面是否有数据
+		bool _calculate_unwrap = true;
+		for (int i = 0; i < dlg->strtgy.col_steps.size(); i++)
+		{
+			if (dlg->strtgy.col_steps[i] != 0)
+			{
+				if (func_wrap_phase[i].empty())
+					_calculate_unwrap = false;
+			}
+		}
+		if (_calculate_unwrap)
+		{
+			if (count == 3)
+				Get_Absolute_Phase_3(func_wrap_phase, dlg->strtgy.col_cycles, func_unwrap_phase);
+			if (count == 2)
+				Get_Absolute_Phase_2(func_wrap_phase, dlg->strtgy.col_cycles, func_unwrap_phase);
+			if (count == 1)
+				//单波长解相方法，研发中。。。
+				;
+
+			//最后将我们的图像存储下来
+			if (dlg->_is_saving.GetCheck() == BST_CHECKED)
+			{
+				Mat save_img;
+				func_unwrap_phase.convertTo(save_img, CV_8UC1, round(1824 / dlg->strtgy.col_cycles[0]/CV_PI/2) - 1);
+				CString Path;
+				dlg->_dir_path.GetWindowText(Path);
+				char file_name[50];
+				sprintf_s(file_name, "unwrap_phase_%05d.bmp", pic_count++);
+				string full_name = Path + "\\" + file_name;
+				imwrite(full_name, save_img);
+			}
+		}
+
+	}
+	return 0;
+}
+
+//工作者线程函数
+UINT Right_ThreadUnwarp(LPVOID lpParam)
+{
+	CBinocularDlg *dlg = (CBinocularDlg*)lpParam;
+	//首先 获得一些最基本的数据
+	unsigned int all_size = dlg->strtgy.col_steps[0] + dlg->strtgy.col_steps[1] + dlg->strtgy.col_steps[2];
+	int count = 0;		//用于表示到底用了多少个波长 单频有单频的解相方法，多频有多频的解相方法
+	for (int i = 0; i < dlg->strtgy.col_steps.size(); i++)
+	{
+		if (dlg->strtgy.col_steps[i] != 0)
+			count++;
+	}
+
+	while (dlg->right_need_unwrap)
+	{
+
+	}
+	return 0;
+}
+
+void CBinocularDlg::OnBnClickedBtnUnwarp()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	//开辟两个线程来计算结果，并且需要把计算出来的结果进行显示 好吧我承认我放弃了。。。不显示了，改为存图
+	//如果开发新的一版，绝对不会采用这种SB形式，做一个对话框调用一个对话框，从而实现效果
+	//也许我可以直接调用每个相机的显示窗口来显示相位效果。。？ 并且一定要用VIMBA!!!!! 这个PVAPI用的我快死了
+	//投影仪官方只有这个垃圾可以使用，那就先自己写了一个projector类 用这个吧（微笑）
+	if (left_need_unwrap)
+		left_unwrap_h = AfxBeginThread(Left_ThreadUnwarp, this);
+	//if (right_need_unwrap)
+		//right_unwrap_h = AfxBeginThread(Right_ThreadUnwarp, this);
+}

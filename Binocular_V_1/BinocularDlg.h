@@ -18,6 +18,7 @@
 #define CAM_SHOW_PIC_L			4			//用于展示左相机图像
 #define CAM_SHOW_PIC_R			5			//用于展示右相机图像
 #define MAX_CAMERA_NUM 20
+
 // CBinocularDlg 对话框
 class CBinocularDlg : public CDialogEx
 {
@@ -41,13 +42,17 @@ public:
 
 	//用于计算相位和三维效果的参数 其中存储了原始图片 
 	//保证在处理的过程中，所有的图像ready标签都是最新的 即我们采用了最新的图进行了处理
+	volatile bool left_need_unwrap;
 	cv::Mat* buffer_left;
 	bool* left_buffer_ready;
 	CRITICAL_SECTION* left_buffer_cs;	//在将相机的数据拿入从而进行处理的时候，我们需要按时的更新拍摄的图像	
+	CWinThread *left_unwrap_h;
 
+	volatile bool right_need_unwrap;
 	cv::Mat* buffer_right;
 	bool* right_buffer_ready;
 	CRITICAL_SECTION* right_buffer_cs;	//在将相机的数据拿入从而进行处理的时候，我们需要按时的更新拍摄的图像
+	CWinThread *right_unwrap_h;
 
 	//当采用GPU进行处理的时候，我们也可以将图片直接导入GPU中避免多余的拷贝，复制工作等。
 
@@ -111,6 +116,11 @@ public:
 	CButton _is_saving;
 	CButton _is_repeat;
 
+	CButton _btn_startexp;
+	CButton _btn_unwarp;
+	CButton _btn_calc3d;
+	CButton _btn_stopacq;
+
 	afx_msg void OnSelchangeCmbTrigger();
 	afx_msg void OnBnClickedBtnopenleft();
 	afx_msg void OnBnClickedBtncloseleft();
@@ -135,6 +145,8 @@ public:
 	afx_msg void OnEnChangeEdtStep2();
 	afx_msg void OnEnChangeEdtStep3();
 	afx_msg void OnBnClickedCheck1();
+	afx_msg void OnBnClickedBtnEnd();
+	afx_msg void OnBnClickedBtnUnwarp();
 
 	CRITICAL_SECTION Log_Protection;		//日志单线程操作需要的保护
 	CRITICAL_SECTION Proj_Protection;		//用于保护相机 只有单个线程能够对相机进行USB读写操作
@@ -143,10 +155,12 @@ public:
 	void append_log(std::string& log_data);		//对Log进行添加
 	void update_projector_status();				//更新投影仪的状态信息
 	void update_show(Camera * cam, UINT ID);
-	
-	afx_msg void OnBnClickedBtnEnd();
 };
 
-//单相机 单线程开始采集函数
-UINT Left_ThreadCapture(LPVOID lpParam);
+//单相机 单线程开始采集函数 仅仅是为了避免UI界面卡机 所以开辟一个新线程去处理
+UINT Left_ThreadCapture(LPVOID lpParam);		
 UINT Right_ThreadCapture(LPVOID lpParam);
+
+//单相机 单线程包裹相位计算函数	单纯的工作者线程 用于计算数据，并将数据传给结果 在获取图像的过程中，一旦获取图像被中断，那么立即停止计算
+UINT Left_ThreadUnwarp(LPVOID lpParam);
+UINT Right_ThreadUnwarp(LPVOID lpParam);
