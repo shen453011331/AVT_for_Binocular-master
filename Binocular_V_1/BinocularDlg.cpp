@@ -70,7 +70,6 @@ void CBinocularDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
 	DDX_Control(pDX, IDC_CMB_TRIGGER, _triger_type);
-	DDX_Text(pDX, IDC_EDT_EXPORE, _setted_exp_val);
 	DDX_IPAddress(pDX, IDC_IPADD_LEFT, _left_ip);
 	DDX_IPAddress(pDX, IDC_IPADD_RIGHT, _right_ip);
 	DDX_Control(pDX, IDC_EDITLOG, _log_ctrl);
@@ -166,28 +165,27 @@ BOOL CBinocularDlg::OnInitDialog()
 	//所有Pv函数在使用前 需要添加PvInitialize()
 	PvInitialize();
 
-	_triger_type.SetCurSel(1);
+	_triger_type.SetCurSel(2);
 	_is_saving.SetCheck(0);
 	_frame_set_l.SetWindowText(_T("30"));
 	_frame_set_r.SetWindowText(_T("30"));
-	_left_expose_value.SetWindowText(_T("5000"));
-	_right_expose_value.SetWindowText(_T("5000"));
+	_left_expose_value.SetWindowText(_T("10000"));
+	_right_expose_value.SetWindowText(_T("10000"));
 
 
 	//IP初始化
 	_left_ip = ntohl(inet_addr("192.168.1.10"));		
 	_right_ip = ntohl(inet_addr("192.168.1.9"));
-	_setted_exp_val.Format(_T("%d"),5000);
 	
 	strtgy.col_cycles = { 70,72,84 };
-	strtgy.col_steps = { 3,3,3 };
+	strtgy.col_steps = { 10,12,12 };
 
 	_cycle_1.SetWindowText(_T("70"));
 	_cycle_2.SetWindowText(_T("72"));
 	_cycle_3.SetWindowText(_T("84"));
-	_step_1.SetWindowText(_T("3"));
-	_step_2.SetWindowText(_T("3"));
-	_step_3.SetWindowText(_T("3"));
+	_step_1.SetWindowText(_T("10"));
+	_step_2.SetWindowText(_T("12"));
+	_step_3.SetWindowText(_T("12"));
 
 	UpdateData(FALSE);
 
@@ -198,8 +196,8 @@ BOOL CBinocularDlg::OnInitDialog()
 	//初始化投影仪
 	projector = new Projector();
 	
-	_edt_proj_exp.SetWindowTextA(_T("25000"));
-	_edt_proj_prd.SetWindowTextA(_T("25000"));
+	_edt_proj_exp.SetWindowText(_T("25000"));
+	_edt_proj_prd.SetWindowText(_T("25000"));
 
 	//开启定时器
 	SetTimer(CAM_FINDER_TIMER_ID, 1000, 0);
@@ -850,7 +848,10 @@ void CBinocularDlg::OnBnClickedBtnStartacq()
 		right_need_unwrap = false;
 	}
 
-
+	_btn_startexp.EnableWindow(true);
+	_btn_unwarp.EnableWindow(true);
+	_btn_calc3d.EnableWindow(true);
+	_btn_stopacq.EnableWindow(true);
 	append_log(string("Mesurement setting init commplete."));
 }
 
@@ -934,15 +935,17 @@ void CBinocularDlg::OnBnClickedBtnEnd()
 	// TODO: 在此添加控件通知处理程序代码
 
 	//先让重建的线程停止
-	if (left_need_unwrap == true)
+	if (left_is_unwrap == true)
 	{
 		left_need_unwrap = false;
 		WaitForSingleObject(left_unwrap_h,INFINITY);		//直到线程退出才停止
+		left_is_unwrap = false;
 	}
-	if (right_need_unwrap == true)
+	if (right_is_unwrap == true)
 	{
 		right_need_unwrap = false;
 		WaitForSingleObject(right_unwrap_h, INFINITY);		//直到线程退出才停止
+		right_is_unwrap = false;
 	}
 	
 	//然后再关闭相机
@@ -999,6 +1002,11 @@ void CBinocularDlg::OnBnClickedBtnEnd()
 		right_Camera->buffer_size = 0;
 		buffer_right = NULL;
 	}
+
+	_btn_startexp.EnableWindow(false);
+	_btn_unwarp.EnableWindow(false);
+	_btn_calc3d.EnableWindow(false);
+	_btn_stopacq.EnableWindow(false);
 }
 
 UINT Left_ThreadCapture(LPVOID lpParam)
@@ -1321,7 +1329,7 @@ UINT Left_ThreadUnwarp(LPVOID lpParam)
 					func_img_buffer[1][i - dlg->strtgy.col_steps[0]] = dlg->buffer_left[i].clone();
 					cycle_pattern_changed[1] = true;
 				}
-				if (i >= dlg->strtgy.col_steps[1] + dlg->strtgy.col_steps[2] && i < all_size)
+				if (i >= dlg->strtgy.col_steps[0] + dlg->strtgy.col_steps[1] && i < all_size)
 				{
 					func_img_buffer[2][i - dlg->strtgy.col_steps[0] - dlg->strtgy.col_steps[1]] = dlg->buffer_left[i].clone();
 					cycle_pattern_changed[2] = true;
@@ -1407,7 +1415,8 @@ UINT Left_ThreadUnwarp(LPVOID lpParam)
 			if (dlg->_is_saving.GetCheck() == BST_CHECKED)
 			{
 				Mat save_img;
-				func_unwrap_phase.convertTo(save_img, CV_8UC1, round(1824 / dlg->strtgy.col_cycles[0]/CV_PI/2) - 1);
+				//func_unwrap_phase.convertTo(save_img, CV_8UC1, round(1824 / dlg->strtgy.col_cycles[0]/CV_PI/2) - 1);
+				func_unwrap_phase.convertTo(save_img, CV_8UC1, 2);
 				CString Path;
 				dlg->_dir_path.GetWindowText(Path);
 				char file_name[50];
@@ -1449,7 +1458,14 @@ void CBinocularDlg::OnBnClickedBtnUnwarp()
 	//也许我可以直接调用每个相机的显示窗口来显示相位效果。。？ 并且一定要用VIMBA!!!!! 这个PVAPI用的我快死了
 	//投影仪官方只有这个垃圾可以使用，那就先自己写了一个projector类 用这个吧（微笑）
 	if (left_need_unwrap)
+	{
 		left_unwrap_h = AfxBeginThread(Left_ThreadUnwarp, this);
+		left_is_unwrap = true;
+	}
 	//if (right_need_unwrap)
-		//right_unwrap_h = AfxBeginThread(Right_ThreadUnwarp, this);
+	//{
+	//	right_unwrap_h = AfxBeginThread(Right_ThreadUnwarp, this);
+	//	right_is_unwrap = true;
+	//}
+	//	
 }

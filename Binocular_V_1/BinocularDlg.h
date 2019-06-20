@@ -43,12 +43,14 @@ public:
 	//用于计算相位和三维效果的参数 其中存储了原始图片 
 	//保证在处理的过程中，所有的图像ready标签都是最新的 即我们采用了最新的图进行了处理
 	volatile bool left_need_unwrap;
+	bool left_is_unwrap;
 	cv::Mat* buffer_left;
 	bool* left_buffer_ready;
 	CRITICAL_SECTION* left_buffer_cs;	//在将相机的数据拿入从而进行处理的时候，我们需要按时的更新拍摄的图像	
 	CWinThread *left_unwrap_h;
 
 	volatile bool right_need_unwrap;
+	bool right_is_unwrap;
 	cv::Mat* buffer_right;
 	bool* right_buffer_ready;
 	CRITICAL_SECTION* right_buffer_cs;	//在将相机的数据拿入从而进行处理的时候，我们需要按时的更新拍摄的图像
@@ -82,7 +84,6 @@ protected:
 
 	DECLARE_MESSAGE_MAP()
 public:
-	CString _setted_exp_val;
 	DWORD _left_ip;
 	DWORD _right_ip;
 

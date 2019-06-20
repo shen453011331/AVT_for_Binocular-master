@@ -443,23 +443,23 @@ void Get_Absolute_Phase_3(const vector<Mat>& ph_img,const vector<int>& cycle, Ma
 	//利用两个包裹相位 计算两个波长更长的相位 顺序 72 75 90 输入的图像要么严格遵守该顺序，要么改写下列方法
 	Mat fh[3];
 	//排序 并记录变换结果
-	vector<int> idx;
-	sort_num(cycle, idx);
+	//vector<int> idx;
+	//sort_num(cycle, idx);
 	//注意，永远是短波长减长波长
-	fh[0] = ph_img[idx[0]] - ph_img[idx[1]];
-	fh[1] = ph_img[idx[0]] - ph_img[idx[2]];
+	fh[0] = ph_img[0] - ph_img[1];
+	fh[1] = ph_img[0] - ph_img[2];
 	//注意 这里是一个浅复制
-	fh[2] = ph_img[idx[0]];			
+	fh[2] = ph_img[0];			
 
 	float cycle_new[3] =
 	{
-		float(cycle[idx[0]] * cycle[idx[1]]) / float(cycle[idx[1]] - cycle[idx[0]]),
-		float(cycle[idx[0]] * cycle[idx[2]]) / float(cycle[idx[2]] - cycle[idx[0]]),
-		float(cycle[idx[0]])
+		float(cycle[0] * cycle[1]) / float(cycle[1] - cycle[0]),
+		float(cycle[0] * cycle[2]) / float(cycle[2] - cycle[0]),
+		float(cycle[0])
 	};
 
-	int height = ph_img[idx[0]].size().height;
-	int width = ph_img[idx[0]].size().width;
+	int height = ph_img[0].size().height;
+	int width = ph_img[0].size().width;
 
 	//消除其中超过PI或者小于-PI的点
 	int i, j, k;
@@ -480,7 +480,7 @@ void Get_Absolute_Phase_3(const vector<Mat>& ph_img,const vector<int>& cycle, Ma
 		foit[i] = Mat::zeros(height, width, CV_32FC1);
 
 	//尽量不要采用底层指针操作，而使用OpenCV封装好的操作 其调用一些高级的语法命令 能够提高我们的处理速度
-	foit[1] = (((cycle_new[0] / cycle_new[1])* fh[0]) - fh[1]) / (2 * CV_PI);
+	foit[1] = (((cycle_new[0] / cycle_new[1])* fh[0]) - fh[1]) / (CV_PI);
 	for (int i = 0; i < height; i++)
 		for (int j = 0; j < width; j++)
 			foit[1].ptr<float>(i)[j] = round(foit[1].ptr<float>(i)[j]);
@@ -488,15 +488,15 @@ void Get_Absolute_Phase_3(const vector<Mat>& ph_img,const vector<int>& cycle, Ma
 	if (need_filter)
 		medianBlur(foit[1], foit[1], 3);
 
-	foit[2] = ((cycle_new[1] / cycle_new[2]) * (foit[1] * 2 * CV_PI + fh[1]) - fh[2]) / (2 * CV_PI);
+	foit[2] = ((cycle_new[1] / cycle_new[2]) * (foit[1] * CV_PI + fh[1]) - fh[2]) / (CV_PI);
 	for (int i = 0; i < height; i++)
 		for (int j = 0; j < width; j++)
 			foit[2].ptr<float>(i)[j] = round(foit[2].ptr<float>(i)[j]);
-	if (need_filter)
-		medianBlur(foit[2], foit[2], 3);
+	//medianBlur(foit[2], foit[2], 3);
 
 	out.create(height, width, CV_32FC1);
-	out = foit[2] * 2 * CV_PI + fh[2];
+	out = foit[2] * CV_PI + fh[2];
+	//out = foit[2];
 	if (need_filter)
 		cv::medianBlur(out, out, 3);
 }

@@ -10,7 +10,7 @@ using namespace cv;
 using namespace std;
 
 #define MAX_FRAMES 100
-#define THREADNUM 5
+#define THREADNUM 3
 enum AttrType
 {
 	Enum = 1,
